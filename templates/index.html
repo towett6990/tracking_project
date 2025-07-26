@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Device Inventory</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        input[type="text"] { padding: 6px; width: 300px; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+    <h1>Device Inventory</h1>
+
+    <form method="GET" action="{{ url_for('index') }}">
+        <input type="text" name="query" placeholder="Search..." value="{{ request.args.get('query', '') }}">
+        <button type="submit">Search</button>
+    </form>
+
+    {% if devices %}
+    <table>
+        <thead>
+            <tr>
+                <th>Serial Number</th>
+                <th>Make</th>
+                <th>Model</th>
+                <th>Type</th>
+                <th>Status</th>
+                <th>Location</th>
+                <th>Last Updated</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for device in devices %}
+            <tr>
+                <td>{{ device.serial_number }}</td>
+                <td>{{ device.make }}</td>
+                <td>{{ device.model }}</td>
+                <td>{{ device.device_type }}</td>
+                <td>{{ device.current_status }}</td>
+                <td>{{ device.current_location }}</td>
+                <td>{{ device.last_updated }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>No devices found.</p>
+    {% endif %}
+</body>
+</html>

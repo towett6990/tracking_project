@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<h2 class="text-xl font-bold mb-4">Device Details</h2>
+
+{% if message %}
+  <p class="text-red-600">{{ message }}</p>
+{% elif device %}
+  <div class="mb-4">
+    <strong>Serial:</strong> {{ device.serial_number }}<br>
+    <strong>Make:</strong> {{ device.make }}<br>
+    <strong>Model:</strong> {{ device.model }}<br>
+    <strong>Status:</strong> {{ device.current_status }}<br>
+    <strong>Location:</strong> {{ device.current_location }}<br>
+    <strong>Last Updated:</strong> {{ device.last_updated }}<br>
+  </div>
+
+  {% if device.latitude and device.longitude %}
+    <!-- Map Container -->
+    <div id="map" style="height: 400px;" class="rounded-xl shadow-md mb-4"></div>
+
+    <!-- Leaflet CSS -->
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-sA+e2Yk0nb59WzpMC5lD/TZuA4uTNyZajM2ro3cPpWY="
+      crossorigin=""
+    />
+
+    <!-- Leaflet JS -->
+    <script
+      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+      integrity="sha256-pyfJ2sy5iUdTeqn3Rk9Mt0LKZAlT3/jqGBU3E8g1tWQ="
+      crossorigin=""
+    ></script>
+
+    <!-- Map Setup Script -->
+    <script>
+      document.addEventListener("DOMContentLoaded", function () {
+        const lat = parseFloat("{{ device.latitude }}");
+        const lon = parseFloat("{{ device.longitude }}");
+
+        if (!isNaN(lat) && !isNaN(lon)) {
+          const map = L.map("map").setView([lat, lon], 15);
+
+          L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            attribution: "© OpenStreetMap contributors"
+          }).addTo(map);
+
+          L.marker([lat, lon])
+            .addTo(map)
+            .bindPopup(`<b>{{ device.serial_number }}</b><br>{{ device.make }} {{ device.model }}`)
+            .openPopup();
+        } else {
+          console.warn("Invalid coordinates: ", lat, lon);
+        }
+      });
+    </script>
+  {% else %}
+    <p class="text-yellow-600">No GPS coordinates available for this device.</p>
+  {% endif %}
+{% endif %}
+
+<a href="{{ url_for('index') }}" class="text-blue-500 underline">← Back</a>
+{% endblock %}

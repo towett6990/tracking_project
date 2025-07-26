@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Track Device</title>
+</head>
+<body>
+    <h2>Tracking Device: {{ serial }}</h2>
+
+    <p id="status">Getting your location...</p>
+    <p id="location"></p>
+
+    <script>
+        const serial = "{{ serial }}";
+
+        function sendLocation(lat, lon) {
+            fetch("/api/report_location", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    serial_number: serial,
+                    latitude: lat,
+                    longitude: lon
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.location) {
+                    document.getElementById("status").innerText = "Location updated successfully!";
+                    document.getElementById("location").innerText = data.location;
+                } else {
+                    document.getElementById("status").innerText = "Error: " + JSON.stringify(data);
+                }
+            })
+            .catch(err => {
+                document.getElementById("status").innerText = "Failed to send location.";
+                console.error(err);
+            });
+        }
+
+        function getLocation() {
+            if ("geolocation" in navigator) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        const lat = position.coords.latitude;
+                        const lon = position.coords.longitude;
+                        sendLocation(lat, lon);
+                    },
+                    (error) => {
+                        document.getElementById("status").innerText = "Failed to get location.";
+                        console.error(error);
+                    }
+                );
+            } else {
+                document.getElementById("status").innerText = "Geolocation not supported.";
+            }
+        }
+
+        getLocation();
+    </script>
+</body>
+</html>

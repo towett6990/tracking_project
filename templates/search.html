@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+<head><title>Search Result</title></head>
+<body>
+<h2>Search Result</h2>
+{% if device %}
+<p><strong>Serial:</strong> {{ serial }}</p>
+<p><strong>Make:</strong> {{ device.make }}</p>
+<p><strong>Model:</strong> {{ device.model }}</p>
+<p><strong>Last Location:</strong> {{ device.location }}</p>
+<p><strong>Last Updated:</strong> {{ device.last_updated }}</p>
+{% else %}
+<p>No device found with that serial number.</p>
+{% endif %}
+<a href="/">← Back</a>
+</body>
+</html>

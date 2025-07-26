@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Add New Device</title>
+</head>
+<body>
+    <h1>Add a New Device</h1>
+
+    <form method="post" action="{{ url_for('add_device') }}">
+        <label>Serial Number:</label><br>
+        <input type="text" name="serial_number" required><br><br>
+
+        <label>Make:</label><br>
+        <input type="text" name="make"><br><br>
+
+        <label>Model:</label><br>
+        <input type="text" name="model"><br><br>
+
+        <label>Type:</label><br>
+        <input type="text" name="type"><br><br>
+
+        <label>Status:</label><br>
+        <input type="text" name="status" value="In Stock"><br><br>
+
+        <label>Location:</label><br>
+        <input type="text" name="location"><br><br>
+
+        <button type="submit">Add Device</button>
+    </form>
+
+    <p><a href="{{ url_for('index') }}">← Back to device list</a></p>
+</body>
+</html>

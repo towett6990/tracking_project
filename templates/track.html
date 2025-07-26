@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Device Tracker</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        #map { height: 500px; width: 100%; margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <h2>Tracking Device: {{ serial }}</h2>
+
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        fetch(`/api/devices/{{ serial }}`)
+            .then(response => response.json())
+            .then(data => {
+                if (!data.latitude || !data.longitude) {
+                    alert("No location data available for this device.");
+                    return;
+                }
+
+                const map = L.map('map').setView([data.latitude, data.longitude], 13);
+
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© OpenStreetMap contributors'
+                }).addTo(map);
+
+                L.marker([data.latitude, data.longitude])
+                    .addTo(map)
+                    .bindPopup(`${data.make} ${data.model}<br>${data.current_location}`)
+                    .openPopup();
+            })
+            .catch(error => {
+                console.error("Error loading location:", error);
+            });
+    </script>
+</body>
+</html>

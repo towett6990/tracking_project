@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Send GPS Location</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script>
+        function sendLocation() {
+            if (!navigator.geolocation) {
+                alert("Geolocation not supported by your browser.");
+                return;
+            }
+
+            navigator.geolocation.getCurrentPosition(function (position) {
+                const data = {
+                    serial_number: document.getElementById("serial").value,
+                    latitude: position.coords.latitude,
+                    longitude: position.coords.longitude,
+                    current_location: "Auto GPS"
+                };
+
+                fetch("/api/report_location", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify(data)
+                }).then(response => response.json())
+                  .then(result => alert(result.message))
+                  .catch(err => alert("Failed to send location"));
+            });
+        }
+    </script>
+</head>
+<body>
+    <h2>Send GPS Location</h2>
+    <label>Serial Number:</label>
+    <input type="text" id="serial" placeholder="Enter serial number" />
+    <button onclick="sendLocation()">Send Location</button>
+</body>
+</html>

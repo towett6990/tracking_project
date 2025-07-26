@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Track Device Location</title>
+    <style>
+        #map {
+            height: 500px;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <h1>Track Device by Serial Number</h1>
+    <form method="POST">
+        <label for="serial_number">Serial Number:</label>
+        <input type="text" name="serial_number" required>
+        <button type="submit">Track</button>
+    </form>
+
+    {% if latitude and longitude %}
+        <h2>Device Found</h2>
+        <p><strong>Latitude:</strong> {{ latitude }}</p>
+        <p><strong>Longitude:</strong> {{ longitude }}</p>
+        <div id="map"></div>
+        <script>
+            function initMap() {
+                var deviceLocation = { lat: parseFloat({{ latitude }}), lng: parseFloat({{ longitude }}) };
+                var map = new google.maps.Map(document.getElementById('map'), {
+                    zoom: 15,
+                    center: deviceLocation
+                });
+                new google.maps.Marker({
+                    position: deviceLocation,
+                    map: map
+                });
+            }
+        </script>
+        <script src="https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_MAPS_API_KEY&callback=initMap" async defer></script>
+    {% elif searched %}
+        <p style="color: red;">Device not found or missing coordinates.</p>
+    {% endif %}
+</body>
+</html>

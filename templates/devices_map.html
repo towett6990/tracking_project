@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>All Devices Map</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        #map { height: 600px; width: 100%; margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <h2>Device Location Dashboard</h2>
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        fetch("/api/devices")
+            .then(res => res.json())
+            .then(devices => {
+                const map = L.map('map').setView([0.0236, 37.9062], 6); // Centered on Kenya
+
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© OpenStreetMap contributors'
+                }).addTo(map);
+
+                devices.forEach(device => {
+                    if (device.latitude && device.longitude) {
+                        L.marker([device.latitude, device.longitude])
+                            .addTo(map)
+                            .bindPopup(`
+                                <strong>${device.make} ${device.model}</strong><br>
+                                Serial: ${device.serial_number}<br>
+                                Location: ${device.current_location}<br>
+                                Status: ${device.current_status}
+                            `);
+                    }
+                });
+            })
+            .catch(err => console.error("Error loading map data:", err));
+    </script>
+</body>
+</html>
