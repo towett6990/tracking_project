@@ -5,12 +5,12 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
 from geopy.geocoders import Nominatim
 import os
-
+from dotenv import load_dotenv
+load_dotenv()
 # --- App & DB Setup ---
 app = Flask(__name__, template_folder=os.path.join(os.getcwd(), 'templates'))
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///devices.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SECRET_KEY'] = 'your-secret-key'
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('SQLALCHEMY_DATABASE_URI', 'sqlite:///devices.db')
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'your-secret-key')
 db = SQLAlchemy(app)
 
 # --- Login Manager ---
