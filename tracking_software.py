@@ -1,50 +1,39 @@
-from flask import Flask, request, jsonify, render_template, redirect, url_for
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 from flask_sqlalchemy import SQLAlchemy
-from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
+from flask_login import LoginManager, login_user, login_required, logout_user, current_user, UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
-from geopy.geocoders import Nominatim
-import os
 
-# --- App & DB Setup ---
-app = Flask(__name__, template_folder=os.path.join(os.getcwd(), 'templates'))
+app = Flask(__name__)
+app.config['SECRET_KEY'] = 'your-secret-key'  # Change this to something secure
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///devices.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SECRET_KEY'] = 'your-secret-key'
-db = SQLAlchemy(app)
 
-# --- Login Manager ---
-login_manager = LoginManager()
-login_manager.init_app(app)
+db = SQLAlchemy(app)
+login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 
-@login_manager.user_loader
-def load_user(user_id):
-    return User.query.get(int(user_id))
-
-# --- Models ---
-class User(db.Model, UserMixin):
+# =========================
+# MODELS
+# =========================
+class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
-    password_hash = db.Column(db.String(128), nullable=False)
-
-    def set_password(self, password):
-        self.password_hash = generate_password_hash(password)
-
-    def check_password(self, password):
-        return check_password_hash(self.password_hash, password)
+    username = db.Column(db.String(150), unique=True, nullable=False)
+    email = db.Column(db.String(150), unique=True, nullable=False)
+    password = db.Column(db.String(200), nullable=False)
 
 class Device(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    serial_number = db.Column(db.String(100), unique=True, nullable=False)
-    make = db.Column(db.String(100))
-    model = db.Column(db.String(100))
-    device_type = db.Column(db.String(100))
-    current_status = db.Column(db.String(100), default='In Stock')
-    current_location = db.Column(db.String(100))
+    serial_number = db.Column(db.String(100), nullable=False)
+    make = db.Column(db.String(100), nullable=False)
+    model = db.Column(db.String(100), nullable=False)
+    device_type = db.Column(db.String(100), nullable=False)
+    current_status = db.Column(db.String(100), nullable=False)
+    current_location = db.Column(db.String(100), nullable=False)
     latitude = db.Column(db.Float)
     longitude = db.Column(db.Float)
-    last_updated = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_updated = db.Column(db.DateTime, default=datetime.utcnow)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
 
     def to_dict(self):
         return {
@@ -60,11 +49,22 @@ class Device(db.Model):
             'last_updated': self.last_updated.isoformat() if self.last_updated else None
         }
 
-# --- Routes ---
+# =========================
+# LOGIN SETUP
+# =========================
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
+
+# =========================
+# ROUTES
+# =========================
+
 @app.route('/')
+@login_required
 def index():
     query = request.args.get('query', '').lower()
-    devices = Device.query.all()
+    devices = Device.query.filter_by(user_id=current_user.id).all()
     if query:
         devices = [d for d in devices if query in d.serial_number.lower() or
                    query in d.make.lower() or query in d.model.lower() or
@@ -72,164 +72,127 @@ def index():
                    query in d.current_location.lower()]
     return render_template('index.html', devices=devices)
 
-@app.route('/home')
-def home():
-    return render_template('landing.html')
-
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
         username = request.form['username']
+        email = request.form['email']
         password = request.form['password']
-        if User.query.filter_by(username=username).first():
-            return "Username already exists", 409
-        new_user = User(username=username)
-        new_user.set_password(password)
+
+        existing_user = User.query.filter((User.username == username) | (User.email == email)).first()
+        if existing_user:
+            flash('Username or email already exists.')
+            return redirect(url_for('register'))
+
+        hashed_password = generate_password_hash(password)
+        new_user = User(username=username, email=email, password=hashed_password)
         db.session.add(new_user)
         db.session.commit()
+        flash('Registration successful. You can now log in.')
         return redirect(url_for('login'))
+
     return render_template('register.html')
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
-        user = User.query.filter_by(username=username).first()
-        if user and user.check_password(password):
+        user = User.query.filter_by(username=request.form['username']).first()
+        if user and check_password_hash(user.password, request.form['password']):
             login_user(user)
             return redirect(url_for('index'))
-        return "Invalid credentials", 401
+        flash('Invalid username or password.')
     return render_template('login.html')
 
 @app.route('/logout')
 @login_required
 def logout():
     logout_user()
-    return redirect(url_for('index'))
+    return redirect(url_for('login'))
 
 @app.route('/add_device', methods=['GET', 'POST'])
 @login_required
 def add_device():
     if request.method == 'POST':
         serial_number = request.form['serial_number']
-        if Device.query.filter_by(serial_number=serial_number).first():
-            return "Device with that serial number already exists", 409
+        existing_device = Device.query.filter_by(serial_number=serial_number, user_id=current_user.id).first()
+        if existing_device:
+            flash('Device with that serial number already exists.')
+            return redirect(url_for('add_device'))
+
         new_device = Device(
             serial_number=serial_number,
             make=request.form['make'],
             model=request.form['model'],
             device_type=request.form['type'],
             current_status=request.form['status'],
-            current_location=request.form['location']
+            current_location=request.form['location'],
+            user_id=current_user.id
         )
         db.session.add(new_device)
         db.session.commit()
+        flash('Device added successfully.')
         return redirect(url_for('index'))
+
     return render_template('add_device.html')
 
-@app.route('/track')
-@login_required
-def track():
-    serial = request.args.get('serial')
-    return render_template('track.html', serial=serial)
-
-@app.route('/location_lookup_form', methods=['GET', 'POST'])
-@login_required
-def location_lookup_form():
-    latitude = longitude = None
-    searched = False
-    if request.method == 'POST':
-        serial_number = request.form['serial_number']
-        device = Device.query.filter_by(serial_number=serial_number).first()
-        searched = True
-        if device and device.latitude and device.longitude:
-            latitude = device.latitude
-            longitude = device.longitude
-    return render_template('location_lookup_form.html', latitude=latitude, longitude=longitude, searched=searched)
-
-@app.route('/search_device')
+@app.route('/search_device', methods=['POST'])
 @login_required
 def search_device():
-    serial_number = request.args.get('serial_number', '').strip()
-    if serial_number:
-        device = Device.query.filter_by(serial_number=serial_number).first()
-        return render_template('device_details.html', device=device or None, message="Device not found" if not device else None)
-    return redirect(url_for('index'))
+    serial_number = request.form['serial_number']
+    device = Device.query.filter_by(serial_number=serial_number, user_id=current_user.id).first()
+    return render_template('search_results.html', device=device)
 
-# --- API Endpoints ---
+# =========================
+# API ROUTES
+# =========================
+
 @app.route('/api/devices', methods=['GET'])
 @login_required
-def get_all_devices():
-    devices = Device.query.all()
+def get_devices():
+    devices = Device.query.filter_by(user_id=current_user.id).all()
     return jsonify([device.to_dict() for device in devices])
 
-@app.route('/api/devices/<string:serial_number>', methods=['GET', 'PUT', 'DELETE'])
+@app.route('/api/devices/<serial_number>', methods=['GET'])
 @login_required
-def device_crud(serial_number):
-    device = Device.query.filter_by(serial_number=serial_number).first()
-    if not device:
-        return jsonify({"error": "Device not found"}), 404
-
-    if request.method == 'GET':
+def get_device_by_serial(serial_number):
+    device = Device.query.filter_by(serial_number=serial_number, user_id=current_user.id).first()
+    if device:
         return jsonify(device.to_dict())
-
-    elif request.method == 'PUT':
-        data = request.get_json()
-        device.make = data.get('make', device.make)
-        device.model = data.get('model', device.model)
-        device.device_type = data.get('device_type', device.device_type)
-        device.current_status = data.get('current_status', device.current_status)
-        device.current_location = data.get('current_location', device.current_location)
-        device.latitude = data.get('latitude', device.latitude)
-        device.longitude = data.get('longitude', device.longitude)
-        db.session.commit()
-        return jsonify(device.to_dict())
-
-    elif request.method == 'DELETE':
-        db.session.delete(device)
-        db.session.commit()
-        return jsonify({"message": "Device deleted successfully"}), 200
+    return jsonify({'error': 'Device not found'}), 404
 
 @app.route('/api/report_location', methods=['POST'])
 def report_location():
     data = request.get_json()
     serial_number = data.get('serial_number')
+    latitude = data.get('latitude')
+    longitude = data.get('longitude')
+
     device = Device.query.filter_by(serial_number=serial_number).first()
     if not device:
-        return jsonify({"error": "Device not found"}), 404
-    device.latitude = data.get('latitude', device.latitude)
-    device.longitude = data.get('longitude', device.longitude)
-    device.current_location = data.get('current_location', device.current_location)
+        return jsonify({'error': 'Device not found'}), 404
+
+    device.latitude = latitude
+    device.longitude = longitude
+    device.last_updated = datetime.utcnow()
     db.session.commit()
-    return jsonify({"message": "Location updated successfully"})
+    return jsonify({'message': 'Location updated successfully'})
 
-@app.route('/api/location_lookup/<string:serial_number>', methods=['GET'])
+@app.route('/api/location_lookup/<serial_number>', methods=['GET'])
 @login_required
-def lookup_location(serial_number):
-    device = Device.query.filter_by(serial_number=serial_number).first()
-    if not device:
-        return jsonify({"error": "Device not found"}), 404
+def location_lookup(serial_number):
+    device = Device.query.filter_by(serial_number=serial_number, user_id=current_user.id).first()
+    if device:
+        return jsonify({
+            'latitude': device.latitude,
+            'longitude': device.longitude,
+            'last_updated': device.last_updated.isoformat() if device.last_updated else None
+        })
+    return jsonify({'error': 'Device not found'}), 404
 
-    if device.latitude is None or device.longitude is None:
-        return jsonify({"error": "No coordinates available for this device"}), 400
-
-    geolocator = Nominatim(user_agent="device_location_lookup")
-    location = geolocator.reverse((device.latitude, device.longitude), language='en')
-    if not location:
-        return jsonify({"error": "Could not find address"}), 500
-
-    return jsonify({
-        "serial_number": serial_number,
-        "address": location.address,
-        "latitude": device.latitude,
-        "longitude": device.longitude
-    })
-@app.route('/report')
-def report():
-    return render_template('report_location.html')
-
-if __name__ == "__main__":
-    import os
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host='0.0.0.0', port=port)
+# =========================
+# RUN
+# =========================
+if __name__ == '__main__':
+    with app.app_context():
+        db.create_all()
+    app.run(debug=True)

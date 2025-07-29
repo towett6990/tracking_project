@@ -1,32 +1,13 @@
 {% extends 'base.html' %}
-
 {% block content %}
-<h2>➕ Add a New Device</h2>
-<form method="post">
-    <label for="serial_number">Serial Number:</label>
-    <input type="text" id="serial_number" name="serial_number" required><br>
-
-    <label for="make">Make:</label>
-    <input type="text" id="make" name="make"><br>
-
-    <label for="model">Model:</label>
-    <input type="text" id="model" name="model"><br>
-
-    <label for="type">Type:</label>
-    <input type="text" id="type" name="type"><br>
-
-    <label for="status">Status:</label>
-    <input type="text" id="status" name="status"><br>
-
-    <label for="location">Location:</label>
-    <input type="text" id="location" name="location"><br>
-
-    <label for="latitude">Latitude:</label>
-    <input type="text" id="latitude" name="latitude" placeholder="e.g., -1.286389"><br>
-
-    <label for="longitude">Longitude:</label>
-    <input type="text" id="longitude" name="longitude" placeholder="e.g., 36.817223"><br>
-
-    <input type="submit" value="Add Device">
+<h2>Add New Device</h2>
+<form method="POST">
+    <div class="mb-3"><input name="serial_number" class="form-control" placeholder="Serial Number" required></div>
+    <div class="mb-3"><input name="make" class="form-control" placeholder="Make" required></div>
+    <div class="mb-3"><input name="model" class="form-control" placeholder="Model" required></div>
+    <div class="mb-3"><input name="type" class="form-control" placeholder="Device Type" required></div>
+    <div class="mb-3"><input name="status" class="form-control" placeholder="Status" required></div>
+    <div class="mb-3"><input name="location" class="form-control" placeholder="Location" required></div>
+    <button class="btn btn-primary">Add Device</button>
 </form>
 {% endblock %}
