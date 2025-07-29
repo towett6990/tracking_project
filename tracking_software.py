@@ -5,7 +5,8 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'your-secret-key'  # Change this to something secure
+import os
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'fallback-key')
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///devices.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
@@ -96,11 +97,17 @@ def register():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        user = User.query.filter_by(username=request.form['username']).first()
-        if user and check_password_hash(user.password, request.form['password']):
+        email = request.form['email']
+        password = request.form['password']
+        
+        user = User.query.filter_by(email=email).first()
+        if user and check_password_hash(user.password, password):
             login_user(user)
-            return redirect(url_for('index'))
-        flash('Invalid username or password.')
+            flash('Logged in successfully.', 'success')
+            return redirect(url_for('index'))  # Change 'index' to your main route if different
+        else:
+            flash('Invalid email or password', 'danger')
+    
     return render_template('login.html')
 
 @app.route('/logout')
