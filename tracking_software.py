@@ -148,34 +148,65 @@ def index():
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
-        username = request.form['username']
-        email = request.form['email']
-        password = request.form['password']
-        existing_user = User.query.filter((User.username == username) | (User.email == email)).first()
-        if existing_user:
-            flash('Username or email already exists.')
-            return redirect(url_for('register'))
+        try:
+            username = request.form['username']
+            email = request.form['email']
+            password = request.form['password']
+            
+            existing_user = User.query.filter((User.username == username) | (User.email == email)).first()
+            if existing_user:
+                return '<h1>Username or email already exists</h1><a href="/register">Try again</a>'
 
-        hashed_password = generate_password_hash(password)
-        new_user = User(username=username, email=email, password=hashed_password)
-        db.session.add(new_user)
-        db.session.commit()
-        flash('Registration successful. You can now log in.')
-        return redirect(url_for('login'))
-
-    return render_template('register.html')
+            hashed_password = generate_password_hash(password)
+            new_user = User(username=username, email=email, password=hashed_password)
+            db.session.add(new_user)
+            db.session.commit()
+            return '<h1>Registration successful!</h1><a href="/login">Login now</a>'
+        except Exception as e:
+            return f'<h1>Registration Error</h1><p>{str(e)}</p><a href="/register">Try again</a>'
+    
+    # Return simple HTML registration form
+    return '''
+    <!DOCTYPE html>
+    <html>
+    <head><title>Register - Device Tracker</title></head>
+    <body>
+        <h1>Device Tracker - Register</h1>
+        <form method="POST">
+            <p>
+                <label>Username:</label><br>
+                <input type="text" name="username" required>
+            </p>
+            <p>
+                <label>Email:</label><br>
+                <input type="email" name="email" required>
+            </p>
+            <p>
+                <label>Password:</label><br>
+                <input type="password" name="password" required>
+            </p>
+            <button type="submit">Register</button>
+        </form>
+        <p><a href="/login">Already have an account? Login</a></p>
+    </body>
+    </html>
+    '''
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        email = request.form['email']
-        password = request.form['password']
-        user = User.query.filter_by(email=email).first()
-        if user and check_password_hash(user.password, password):
-            login_user(user)
-            return redirect(url_for('index'))
-        else:
-            return '<h1>Invalid email or password</h1><a href="/login">Try again</a>'
+        try:
+            email = request.form['email']
+            password = request.form['password']
+            
+            user = User.query.filter_by(email=email).first()
+            if user and check_password_hash(user.password, password):
+                login_user(user)
+                return '<h1>Login Successful!</h1><p>Welcome back!</p><a href="/">Go to Dashboard</a>'
+            else:
+                return '<h1>Invalid email or password</h1><a href="/login">Try again</a>'
+        except Exception as e:
+            return f'<h1>Login Error</h1><p>{str(e)}</p><a href="/login">Try again</a>'
     
     # Return simple HTML login form
     return '''
