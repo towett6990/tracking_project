@@ -89,6 +89,25 @@ def load_user(user_id):
     return User.query.get(int(user_id))
 
 # =========================
+# ERROR HANDLERS
+# =========================
+@app.errorhandler(500)
+def internal_error(error):
+    return jsonify({
+        'error': 'Internal Server Error',
+        'message': str(error),
+        'timestamp': datetime.utcnow().isoformat()
+    }), 500
+
+@app.errorhandler(404)
+def not_found(error):
+    return jsonify({
+        'error': 'Not Found',
+        'message': 'The requested resource was not found',
+        'timestamp': datetime.utcnow().isoformat()
+    }), 404
+
+# =========================
 # ROUTES
 # =========================
 @app.route('/health')
