@@ -1,34 +1,73 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <title>Device Map</title>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+{% extends "base.html" %}
 
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <style>
-    #map { height: 100vh; }
-  </style>
-</head>
-<body>
-  <div id="map"></div>
+{% block content %}
+<!-- Leaflet CSS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script>
-    var map = L.map('map').setView([0, 0], 2); // Center of world
+<!-- Map Container -->
+<div id="map" style="height: 100vh;"></div>
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19
-    }).addTo(map);
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-    const devices = {{ devices|tojson }};
-    devices.forEach(device => {
-      if (device.latitude && device.longitude) {
-        L.marker([parseFloat(device.latitude), parseFloat(device.longitude)])
-          .addTo(map)
-          .bindPopup(`<b>${device.serial_number}</b><br>${device.make || ''} ${device.model || ''}`);
+<script>
+  const map = L.map("map").setView([0, 0], 2);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution: "© OpenStreetMap contributors"
+  }).addTo(map);
+
+  let markers = {};
+
+  function fetchAndRenderDevices() {
+    fetch('/api/devices')
+      .then(res => res.json())
+      .then(devices => {
+        Object.values(markers).forEach(marker => map.removeLayer(marker));
+        markers = {};
+
+        devices.forEach(device => {
+          if (device.latitude && device.longitude) {
+            const marker = L.marker([device.latitude, device.longitude])
+              .addTo(map)
+              .bindPopup(`<b>${device.serial_number}</b><br>${device.make || ''} ${device.model || ''}`);
+            markers[device.serial_number] = marker;
+          }
+        });
+      });
+  }
+
+  fetchAndRenderDevices();
+  setInterval(fetchAndRenderDevices, 10000);
+
+  // 🔍 Geolocation: Client-generated device location
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      position => {
+        const lat = position.coords.latitude;
+        const lon = position.coords.longitude;
+
+        fetch('/api/report_location', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            serial_number: 'DEV-123456', // Replace with user's actual device
+            latitude: lat,
+            longitude: lon
+          })
+        })
+        .then(res => res.json())
+        .then(data => console.log('Location reported:', data))
+        .catch(err => console.error('Failed to report:', err));
+      },
+      error => {
+        console.error('Geolocation error:', error.message);
       }
-    });
-  </script>
-</body>
-</html>
+    );
+  } else {
+    alert('Geolocation is not supported by this browser.');
+  }
+</script>
+{% endblock %}

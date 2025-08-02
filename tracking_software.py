@@ -162,6 +162,11 @@ def search_device():
     serial_number = request.form['serial_number']
     device = Device.query.filter_by(serial_number=serial_number, user_id=current_user.id).first()
     return render_template('search_results.html', device=device)
+@app.route('/map')
+@login_required
+def map_view():
+    devices = Device.query.filter_by(user_id=current_user.id).all()
+    return render_template('map.html', devices=devices)
 
 # =========================
 # API ROUTES
