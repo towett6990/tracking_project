@@ -2,6 +2,16 @@ services:
   - type: web
     name: device-tracker
     env: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: python tracking_software.py
+    buildCommand: |
+      pip install --upgrade pip
+      pip install -r requirements.txt
+      python init_db.py
+    startCommand: gunicorn wsgi:app --bind 0.0.0.0:$PORT
     autoDeploy: true
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        value: sqlite:///tmp/devices.db
+      - key: FLASK_ENV
+        value: production
