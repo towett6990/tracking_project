@@ -128,6 +128,11 @@ def health_check():
             'error': str(e),
             'timestamp': datetime.utcnow().isoformat()
         }), 500
+
+@app.route('/test')
+def test_route():
+    """Simple test route without templates"""
+    return '<h1>Test Route Works!</h1><p>Flask app is running correctly.</p>'
 @app.route('/')
 @login_required
 def index():
@@ -168,11 +173,32 @@ def login():
         user = User.query.filter_by(email=email).first()
         if user and check_password_hash(user.password, password):
             login_user(user)
-            flash('Logged in successfully.', 'success')
             return redirect(url_for('index'))
         else:
-            flash('Invalid email or password', 'danger')
-    return render_template('login.html')
+            return '<h1>Invalid email or password</h1><a href="/login">Try again</a>'
+    
+    # Return simple HTML login form
+    return '''
+    <!DOCTYPE html>
+    <html>
+    <head><title>Login - Device Tracker</title></head>
+    <body>
+        <h1>Device Tracker - Login</h1>
+        <form method="POST">
+            <p>
+                <label>Email:</label><br>
+                <input type="email" name="email" required>
+            </p>
+            <p>
+                <label>Password:</label><br>
+                <input type="password" name="password" required>
+            </p>
+            <button type="submit">Login</button>
+        </form>
+        <p><a href="/register">Register</a></p>
+    </body>
+    </html>
+    '''
 
 @app.route('/logout')
 @login_required
