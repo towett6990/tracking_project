@@ -138,25 +138,28 @@ def test_route():
 def reset_database():
     """Reset database with correct schema"""
     try:
-        # Drop all tables
-        db.drop_all()
-        # Create all tables with correct schema
-        db.create_all()
-        
-        # Verify tables were created
-        from sqlalchemy import inspect
-        inspector = inspect(db.engine)
-        tables = inspector.get_table_names()
-        
-        # Check user table columns
-        columns = []
-        if 'user' in tables:
-            user_columns = inspector.get_columns('user')
-            columns = [col['name'] for col in user_columns]
-        
-        return f'<h1>Database Reset Successful!</h1><p>Tables: {tables}</p><p>User columns: {columns}</p><a href="/register">Register now</a>'
+        with app.app_context():
+            # Drop all tables
+            db.drop_all()
+            # Create all tables with correct schema
+            db.create_all()
+            
+            # Verify tables were created
+            from sqlalchemy import inspect
+            inspector = inspect(db.engine)
+            tables = inspector.get_table_names()
+            
+            # Check user table columns
+            columns = []
+            if 'user' in tables:
+                user_columns = inspector.get_columns('user')
+                columns = [col['name'] for col in user_columns]
+            
+            return f'<h1>Database Reset Successful!</h1><p>Tables: {tables}</p><p>User columns: {columns}</p><a href="/register">Register now</a>'
     except Exception as e:
-        return f'<h1>Database Reset Error</h1><p>{str(e)}</p>'
+        import traceback
+        error_details = traceback.format_exc()
+        return f'<h1>Database Reset Error</h1><p>{str(e)}</p><pre>{error_details}</pre><a href="/health">Check Health</a>'
 @app.route('/')
 @login_required
 def index():
