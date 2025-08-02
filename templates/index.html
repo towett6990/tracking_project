@@ -1,37 +1,215 @@
-{% extends 'base.html' %}
-{% block content %}
-<h2>My Devices</h2>
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Device Tracker</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <style>
+    #map { height: 500px; }
+    .search-section { margin: 20px auto; text-align: center; }
+    .form-control, .btn { margin: 5px; }
+  </style>
+</head>
+<body>
+  <h1 class="text-center">Device Tracker Map</h1>
 
-<form method="GET" class="mb-3">
-    <input type="text" name="query" class="form-control" placeholder="Search by serial number, make, model..." value="{{ request.args.get('query', '') }}">
-</form>
+  <!-- 🔍 Serial search -->
+  <div class="search-section">
+    <label for="serialSearch">Search by Serial Number:</label>
+    <input
+      type="text"
+      id="serialSearch"
+      class="form-control w-auto d-inline-block"
+      list="serialOptions"
+      placeholder="Enter or choose serial number"
+    />
+    <datalist id="serialOptions"></datalist>
+    <button id="searchButton" class="btn btn-primary">Search</button>
+  </div>
 
-{% if devices %}
-<table class="table table-bordered">
-    <thead>
-        <tr>
-            <th>Serial</th>
-            <th>Make</th>
-            <th>Model</th>
-            <th>Type</th>
-            <th>Status</th>
-            <th>Location</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for device in devices %}
-        <tr>
-            <td>{{ device.serial_number }}</td>
-            <td>{{ device.make }}</td>
-            <td>{{ device.model }}</td>
-            <td>{{ device.device_type }}</td>
-            <td>{{ device.current_status }}</td>
-            <td>{{ device.current_location }}</td>
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
-{% else %}
-<p>No devices found.</p>
-{% endif %}
-{% endblock %}
+  <div class="container">
+    <!-- 🧠 Type Filter -->
+    <div class="row mb-3">
+      <div class="col text-center">
+        <label for="typeFilter">Filter by Device Type:</label>
+        <select id="typeFilter" class="form-control w-auto d-inline-block">
+          <option value="">All</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- 💳 Device Cards -->
+    <div class="row" id="deviceCards"></div>
+
+    <!-- 🗺️ Device Map -->
+    <div id="map"></div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script>
+    const map = L.map('map').setView([0, 0], 2);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    const iconColors = {
+      active: 'green',
+      offline: 'red'
+    };
+
+    function createCustomIcon(status) {
+      const color = iconColors[status.toLowerCase()] || 'blue';
+      return L.icon({
+        iconUrl: `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/marker-icon-${color}.png`,
+        iconSize: [25, 41],
+        iconAnchor: [12, 41],
+        popupAnchor: [1, -34],
+        shadowUrl: 'https://unpkg.com/leaflet@1.6/dist/images/marker-shadow.png'
+      });
+    }
+
+    let allMarkers = [];
+    let historyPolyline = null;
+    let allDevices = [];
+
+    function plotDeviceHistory(serial) {
+      if (historyPolyline) {
+        map.removeLayer(historyPolyline);
+        historyPolyline = null;
+      }
+
+      fetch(`/api/devices/${serial}/history`)
+        .then(res => res.json())
+        .then(path => {
+          const latlngs = path.map(p => [p.latitude, p.longitude]);
+          if (latlngs.length > 1) {
+            historyPolyline = L.polyline(latlngs, { color: 'purple' }).addTo(map);
+            map.fitBounds(historyPolyline.getBounds());
+          }
+        });
+    }
+
+    function createDeviceCard(device) {
+      const card = document.createElement("div");
+      card.className = "col-md-4 mb-3";
+
+      card.innerHTML = `
+        <div class="card h-100">
+          <div class="card-body">
+            <h5 class="card-title">${device.serial_number}</h5>
+            <p class="card-text">
+              <strong>Location:</strong> ${device.current_location}<br>
+              <strong>Status:</strong> ${device.current_status || "Unknown"}<br>
+              <strong>Type:</strong> ${device.device_type || "Unspecified"}
+            </p>
+            <button class="btn btn-outline-primary btn-sm focus-device">Show on Map</button>
+          </div>
+        </div>
+      `;
+
+      card.querySelector(".focus-device").addEventListener("click", () => {
+        const marker = allMarkers.find(m =>
+          m.getPopup().getContent().includes(device.serial_number)
+        );
+        if (marker) {
+          map.setView(marker.getLatLng(), 10);
+          marker.openPopup();
+        }
+        plotDeviceHistory(device.serial_number);
+      });
+
+      return card;
+    }
+
+    function renderDeviceCards(devices) {
+      const cardContainer = document.getElementById("deviceCards");
+      cardContainer.innerHTML = "";
+      devices.forEach(device => {
+        if (device.latitude && device.longitude) {
+          const card = createDeviceCard(device);
+          cardContainer.appendChild(card);
+        }
+      });
+    }
+
+    function updateTypeFilterOptions(devices) {
+      const filterSelect = document.getElementById("typeFilter");
+      const uniqueTypes = [...new Set(devices.map(d => d.device_type).filter(Boolean))];
+      uniqueTypes.forEach(type => {
+        const option = document.createElement("option");
+        option.value = type;
+        option.textContent = type;
+        filterSelect.appendChild(option);
+      });
+    }
+
+    document.getElementById("typeFilter").addEventListener("change", (e) => {
+      const selectedType = e.target.value;
+      const filtered = selectedType
+        ? allDevices.filter(d => d.device_type === selectedType)
+        : allDevices;
+      renderDeviceCards(filtered);
+    });
+
+    function fetchAndPlotDevices() {
+      allMarkers.forEach(marker => map.removeLayer(marker));
+      allMarkers = [];
+
+      fetch("/api/devices")
+        .then(res => res.json())
+        .then(devices => {
+          allDevices = devices;
+          updateTypeFilterOptions(devices);
+          renderDeviceCards(devices);
+
+          devices.forEach(device => {
+            const status = device.current_status || "";
+            if (device.latitude && device.longitude) {
+              const marker = L.marker(
+                [device.latitude, device.longitude],
+                { icon: createCustomIcon(status) }
+              ).addTo(map)
+                .bindPopup(`<b>${device.serial_number}</b><br>${device.current_location}`);
+              allMarkers.push(marker);
+            }
+          });
+        })
+        .catch(err => console.error('Error fetching devices:', err));
+    }
+
+    // 🔍 Serial search
+    const serialInput = document.getElementById("serialSearch");
+    const searchButton = document.getElementById("searchButton");
+
+    searchButton.addEventListener("click", () => {
+      const serial = serialInput.value.trim().toLowerCase();
+      if (!serial) return;
+
+      const matched = allMarkers.find(marker =>
+        marker.getPopup().getContent().toLowerCase().includes(serial)
+      );
+
+      if (matched) {
+        map.setView(matched.getLatLng(), 10);
+        matched.openPopup();
+        plotDeviceHistory(serial);
+      } else {
+        alert("Device not found.");
+      }
+    });
+
+    // 💡 Auto-complete serials
+    fetch('/api/device-serials')
+      .then(res => res.json())
+      .then(serials => {
+        const datalist = document.getElementById("serialOptions");
+        serials.forEach(s => {
+          const option = document.createElement("option");
+          option.value = s;
+          datalist.appendChild(option);
+        });
+      });
+
+    fetchAndPlotDevices();
+  </script>
+</body>
+</html>

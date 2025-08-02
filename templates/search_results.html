@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Search Results{% endblock %}
+{% block content %}
+<h3 class="mb-4">Search Results</h3>
+
+{% if device %}
+<table class="table table-bordered table-dark">
+  <tr><th>Serial</th><td>{{ device.serial_number }}</td></tr>
+  <tr><th>Make</th><td>{{ device.make }}</td></tr>
+  <tr><th>Model</th><td>{{ device.model }}</td></tr>
+  <tr><th>Type</th><td>{{ device.device_type }}</td></tr>
+  <tr><th>Status</th><td>{{ device.current_status }}</td></tr>
+  <tr><th>Location</th><td>{{ device.current_location }}</td></tr>
+{% else %}
+  <p>No device found.</p>
+{% endif %}
+{% endblock %}

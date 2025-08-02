@@ -1,13 +1,18 @@
-{% extends 'base.html' %}
+{% extends "base.html" %}
+{% block title %}Add Device{% endblock %}
 {% block content %}
-<h2>Add New Device</h2>
-<form method="POST">
-    <div class="mb-3"><input name="serial_number" class="form-control" placeholder="Serial Number" required></div>
-    <div class="mb-3"><input name="make" class="form-control" placeholder="Make" required></div>
-    <div class="mb-3"><input name="model" class="form-control" placeholder="Model" required></div>
-    <div class="mb-3"><input name="type" class="form-control" placeholder="Device Type" required></div>
-    <div class="mb-3"><input name="status" class="form-control" placeholder="Status" required></div>
-    <div class="mb-3"><input name="location" class="form-control" placeholder="Location" required></div>
-    <button class="btn btn-primary">Add Device</button>
-</form>
+<div class="row justify-content-center">
+  <div class="col-md-6">
+    <h3 class="mb-4">Add New Device</h3>
+    <form method="POST">
+      <div class="mb-3"><label>Serial Number</label><input type="text" class="form-control" name="serial_number" required></div>
+      <div class="mb-3"><label>Make</label><input type="text" class="form-control" name="make" required></div>
+      <div class="mb-3"><label>Model</label><input type="text" class="form-control" name="model" required></div>
+      <div class="mb-3"><label>Type</label><input type="text" class="form-control" name="type" required></div>
+      <div class="mb-3"><label>Status</label><input type="text" class="form-control" name="status" required></div>
+      <div class="mb-3"><label>Location</label><input type="text" class="form-control" name="location" required></div>
+      <button class="btn btn-primary w-100">Add Device</button>
+    </form>
+  </div>
+</div>
 {% endblock %}
