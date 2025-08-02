@@ -5,6 +5,10 @@ from flask_login import LoginManager, login_user, login_required, logout_user, c
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
 import os
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
 
 # =========================
 # CONFIG
@@ -87,6 +91,23 @@ def load_user(user_id):
 # =========================
 # ROUTES
 # =========================
+@app.route('/health')
+def health_check():
+    """Health check endpoint for deployment debugging"""
+    try:
+        # Test database connection
+        db.session.execute('SELECT 1')
+        return jsonify({
+            'status': 'healthy',
+            'database': 'connected',
+            'timestamp': datetime.utcnow().isoformat()
+        })
+    except Exception as e:
+        return jsonify({
+            'status': 'unhealthy',
+            'error': str(e),
+            'timestamp': datetime.utcnow().isoformat()
+        }), 500
 @app.route('/')
 @login_required
 def index():
