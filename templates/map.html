@@ -1,73 +1,80 @@
-{% extends "base.html" %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Device Map</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+    <style>
+        body {
+            margin: 0;
+            background-color: #121212;
+            color: white;
+            font-family: Arial, sans-serif;
+        }
+        #map {
+            height: 100vh;
+            width: 100%;
+        }
+        .leaflet-control-layers {
+            background-color: rgba(0,0,0,0.7) !important;
+            color: white;
+            border-radius: 8px;
+            padding: 5px;
+        }
+        .leaflet-control-layers label {
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
 
-{% block content %}
-<!-- Leaflet CSS -->
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script>
+        // Initialize map
+        var map = L.map('map').setView([0.0, 0.0], 2);
 
-<!-- Map Container -->
-<div id="map" style="height: 100vh;"></div>
-
-<!-- Leaflet JS -->
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
-<script>
-  const map = L.map("map").setView([0, 0], 2);
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    maxZoom: 19,
-    attribution: "© OpenStreetMap contributors"
-  }).addTo(map);
-
-  let markers = {};
-
-  function fetchAndRenderDevices() {
-    fetch('/api/devices')
-      .then(res => res.json())
-      .then(devices => {
-        Object.values(markers).forEach(marker => map.removeLayer(marker));
-        markers = {};
-
-        devices.forEach(device => {
-          if (device.latitude && device.longitude) {
-            const marker = L.marker([device.latitude, device.longitude])
-              .addTo(map)
-              .bindPopup(`<b>${device.serial_number}</b><br>${device.make || ''} ${device.model || ''}`);
-            markers[device.serial_number] = marker;
-          }
+        // Base layers
+        var liveFeed = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '© OpenStreetMap'
         });
-      });
-  }
 
-  fetchAndRenderDevices();
-  setInterval(fetchAndRenderDevices, 10000);
+        var satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/' +
+            'World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            attribution: 'Tiles © Esri'
+        });
 
-  // 🔍 Geolocation: Client-generated device location
-  if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(
-      position => {
-        const lat = position.coords.latitude;
-        const lon = position.coords.longitude;
+        liveFeed.addTo(map); // Default view
 
-        fetch('/api/report_location', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            serial_number: 'DEV-123456', // Replace with user's actual device
-            latitude: lat,
-            longitude: lon
-          })
-        })
-        .then(res => res.json())
-        .then(data => console.log('Location reported:', data))
-        .catch(err => console.error('Failed to report:', err));
-      },
-      error => {
-        console.error('Geolocation error:', error.message);
-      }
-    );
-  } else {
-    alert('Geolocation is not supported by this browser.');
-  }
-</script>
-{% endblock %}
+        // Layer control for toggling
+        var baseMaps = {
+            "Live Feed": liveFeed,
+            "Satellite": satellite
+        };
+        L.control.layers(baseMaps).addTo(map);
+
+        // Load device locations from Flask API
+        async function loadDevices() {
+            try {
+                let res = await fetch('/api/devices');
+                let devices = await res.json();
+
+                devices.forEach(device => {
+                    if (device.latitude && device.longitude) {
+                        let marker = L.marker([device.latitude, device.longitude]).addTo(map);
+                        marker.bindPopup(`<b>${device.name}</b><br>Serial: ${device.serial_number}<br>Last Seen: ${device.last_seen}`);
+                    }
+                });
+            } catch (err) {
+                console.error('Error loading devices:', err);
+            }
+        }
+
+        loadDevices();
+    </script>
+</body>
+</html>

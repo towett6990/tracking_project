@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+{% block title %}Edit Device{% endblock %}
+{% block content %}
+<div class="container mt-5">
+  <h2 class="text-center mb-4">✏️ Edit Device: {{ device.serial_number }}</h2>
+  <form method="POST">
+    <div class="mb-3">
+      <label class="form-label">Make</label>
+      <input type="text" name="make" class="form-control" value="{{ device.make }}" required>
+    </div>
+    <div class="mb-3">
+      <label class="form-label">Model</label>
+      <input type="text" name="model" class="form-control" value="{{ device.model }}" required>
+    </div>
+    <div class="mb-3">
+      <label class="form-label">Type</label>
+      <input type="text" name="type" class="form-control" value="{{ device.device_type }}" required>
+    </div>
+    <div class="mb-3">
+      <label class="form-label">Status</label>
+      <input type="text" name="status" class="form-control" value="{{ device.current_status }}" required>
+    </div>
+    <div class="mb-3">
+      <label class="form-label">Location</label>
+      <input type="text" name="location" class="form-control" value="{{ device.current_location }}" required>
+    </div>
+    <button type="submit" class="btn btn-primary">💾 Save Changes</button>
+    <a href="{{ url_for('index') }}" class="btn btn-secondary">Cancel</a>
+  </form>
+</div>
+{% endblock %}

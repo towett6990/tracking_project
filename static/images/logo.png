@@ -1,0 +1,41 @@
+<!-- static/images/logo.svg -->
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="120" viewBox="0 0 400 120" role="img" aria-label="DeviceTracker logo">
+  <defs>
+    <linearGradient id="dishGrad" x1="0" x2="1">
+      <stop offset="0%" stop-color="#FFC857"/>
+      <stop offset="100%" stop-color="#FF9F1C"/>
+    </linearGradient>
+    <linearGradient id="baseGrad" x1="0" x2="1">
+      <stop offset="0%" stop-color="#FF6B6B"/>
+      <stop offset="100%" stop-color="#FF3D00"/>
+    </linearGradient>
+    <linearGradient id="waveGrad" x1="0" x2="1">
+      <stop offset="0%" stop-color="#3DDCF7"/>
+      <stop offset="100%" stop-color="#0EA5E9"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Dish icon -->
+  <g transform="translate(10,10)">
+    <!-- dish bowl -->
+    <path d="M60 20 C40 20 20 40 20 60 C20 80 40 100 60 100 C80 100 110 80 110 60 C110 40 90 20 60 20 Z"
+          fill="url(#dishGrad)" stroke="#E88A00" stroke-width="1"/>
+    <!-- feed horn -->
+    <circle cx="78" cy="38" r="6" fill="#FFE9B0" />
+    <!-- base -->
+    <path d="M44 100 L76 100 L86 120 L34 120 Z" fill="url(#baseGrad)"/>
+    <!-- radio waves -->
+    <path d="M92 28 C110 10 130 10 148 28" fill="none" stroke="url(#waveGrad)" stroke-width="6" stroke-linecap="round" />
+    <path d="M98 34 C118 14 140 14 160 34" fill="none" stroke="url(#waveGrad)" stroke-width="4" stroke-linecap="round" opacity="0.9"/>
+  </g>
+
+  <!-- Brand text -->
+  <g transform="translate(150,72)">
+    <text x="0" y="-10" font-family="Segoe UI, Roboto, Arial, sans-serif" font-weight="700" font-size="34" fill="#0EA5E9">
+      Device
+    </text>
+    <text x="0" y="26" font-family="Segoe UI, Roboto, Arial, sans-serif" font-weight="700" font-size="34" fill="#00A3FF">
+      Tracker
+    </text>
+  </g>
+</svg>

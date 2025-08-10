@@ -1,215 +1,87 @@
 {% extends 'base.html' %}
 
-{% block title %}Map View{% endblock %}
+{% block title %}Device Dashboard{% endblock %}
 
 {% block content %}
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-  <style>
-    #map { height: 500px; }
-    .search-section { margin: 20px auto; text-align: center; }
-    .form-control, .btn { margin: 5px; }
-  </style>
+<div class="container mt-5">
+  <h1 class="text-center mb-4 text-white">📋 My Devices</h1>
 
-
-  <h1 class="text-center">Device Tracker Map</h1>
-
-  <!-- 🔍 Serial search -->
-  <div class="search-section">
-    <label for="serialSearch">Search by Serial Number:</label>
+  <!-- 🔍 Search Bar -->
+  <form method="GET" action="{{ url_for('index') }}" class="form-inline justify-content-center mb-4">
     <input
       type="text"
-      id="serialSearch"
-      class="form-control w-auto d-inline-block"
-      list="serialOptions"
-      placeholder="Enter or choose serial number"
+      name="query"
+      class="form-control w-50"
+      placeholder="Search by Serial Number"
+      value="{{ request.args.get('query', '') }}"
     />
-    <datalist id="serialOptions"></datalist>
-    <button id="searchButton" class="btn btn-primary">Search</button>
+    <button type="submit" class="btn btn-primary ml-2">Search</button>
+  </form>
+
+  <!-- ✅ Devices Table -->
+  {% if devices %}
+  <div class="table-responsive">
+    <table class="table table-dark table-striped table-bordered">
+      <thead class="thead-light">
+        <tr>
+          <th>Serial Number</th>
+          <th>Make</th>
+          <th>Model</th>
+          <th>Type</th>
+          <th>Status</th>
+          <th>Location</th>
+          <th>Last Seen</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for device in devices %}
+        <tr>
+          <td>{{ device.serial_number }}</td>
+          <td>{{ device.make }}</td>
+          <td>{{ device.model }}</td>
+          <td>{{ device.device_type }}</td>
+          <td>{{ device.current_status }}</td>
+          <td>{{ device.current_location }}</td>
+          <td>
+            {% if device.last_seen %}
+              {{ device.last_seen.strftime('%Y-%m-%d %H:%M:%S') }}
+            {% else %}
+              Never
+            {% endif %}
+          </td>
+          <td>
+  <a href="{{ url_for('export_device_history', serial_number=device.serial_number) }}"
+     class="btn btn-sm btn-outline-info mb-1">
+    ⬇ Export
+  </a>
+  <a href="{{ url_for('map_view') }}#{{ device.serial_number }}" class="btn btn-sm btn-outline-info mb-1">
+    🗺️ View on Map
+  </a>
+  <a href="{{ url_for('edit_device', device_id=device.id) }}" class="btn btn-sm btn-outline-warning mb-1">
+    ✏️ Edit
+  </a>
+  <form method="POST"
+        action="{{ url_for('delete_device', device_id=device.id) }}"
+        style="display:inline;"
+        onsubmit="return confirm('Are you sure you want to delete this device?');">
+    <button type="submit" class="btn btn-sm btn-outline-danger">🗑️ Delete</button>
+  </form>
+</td>
+
+
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
   </div>
+  {% else %}
+  <p class="text-center text-white">No devices found. Try adding or searching again.</p>
+  {% endif %}
 
-  <div class="container">
-    <!-- 🧠 Type Filter -->
-    <div class="row mb-3">
-      <div class="col text-center">
-        <label for="typeFilter">Filter by Device Type:</label>
-        <select id="typeFilter" class="form-control w-auto d-inline-block">
-          <option value="">All</option>
-        </select>
-      </div>
-    </div>
-
-    <!-- 💳 Device Cards -->
-    <div class="row" id="deviceCards"></div>
-
-    <!-- 🗺️ Device Map -->
-    <div id="map"></div>
+  <!-- ➕ Add Device Shortcut -->
+  <div class="text-center mt-4">
+    <a href="{{ url_for('add_device') }}" class="btn btn-success">➕ Add New Device</a>
   </div>
-
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-  <script>
-    const map = L.map('map').setView([0, 0], 2);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(map);
-
-    const iconColors = {
-      active: 'green',
-      offline: 'red'
-    };
-
-    function createCustomIcon(status) {
-      const color = iconColors[status.toLowerCase()] || 'blue';
-      return L.icon({
-        iconUrl: `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/marker-icon-${color}.png`,
-        iconSize: [25, 41],
-        iconAnchor: [12, 41],
-        popupAnchor: [1, -34],
-        shadowUrl: 'https://unpkg.com/leaflet@1.6/dist/images/marker-shadow.png'
-      });
-    }
-
-    let allMarkers = [];
-    let historyPolyline = null;
-    let allDevices = [];
-
-    function plotDeviceHistory(serial) {
-      if (historyPolyline) {
-        map.removeLayer(historyPolyline);
-        historyPolyline = null;
-      }
-
-      fetch(`/api/devices/${serial}/history`)
-        .then(res => res.json())
-        .then(path => {
-          const latlngs = path.map(p => [p.latitude, p.longitude]);
-          if (latlngs.length > 1) {
-            historyPolyline = L.polyline(latlngs, { color: 'purple' }).addTo(map);
-            map.fitBounds(historyPolyline.getBounds());
-          }
-        });
-    }
-
-    function createDeviceCard(device) {
-      const card = document.createElement("div");
-      card.className = "col-md-4 mb-3";
-
-      card.innerHTML = `
-        <div class="card h-100">
-          <div class="card-body">
-            <h5 class="card-title">${device.serial_number}</h5>
-            <p class="card-text">
-              <strong>Location:</strong> ${device.current_location}<br>
-              <strong>Status:</strong> ${device.current_status || "Unknown"}<br>
-              <strong>Type:</strong> ${device.device_type || "Unspecified"}
-            </p>
-            <button class="btn btn-outline-primary btn-sm focus-device">Show on Map</button>
-          </div>
-        </div>
-      `;
-
-      card.querySelector(".focus-device").addEventListener("click", () => {
-        const marker = allMarkers.find(m =>
-          m.getPopup().getContent().includes(device.serial_number)
-        );
-        if (marker) {
-          map.setView(marker.getLatLng(), 10);
-          marker.openPopup();
-        }
-        plotDeviceHistory(device.serial_number);
-      });
-
-      return card;
-    }
-
-    function renderDeviceCards(devices) {
-      const cardContainer = document.getElementById("deviceCards");
-      cardContainer.innerHTML = "";
-      devices.forEach(device => {
-        if (device.latitude && device.longitude) {
-          const card = createDeviceCard(device);
-          cardContainer.appendChild(card);
-        }
-      });
-    }
-
-    function updateTypeFilterOptions(devices) {
-      const filterSelect = document.getElementById("typeFilter");
-      const uniqueTypes = [...new Set(devices.map(d => d.device_type).filter(Boolean))];
-      uniqueTypes.forEach(type => {
-        const option = document.createElement("option");
-        option.value = type;
-        option.textContent = type;
-        filterSelect.appendChild(option);
-      });
-    }
-
-    document.getElementById("typeFilter").addEventListener("change", (e) => {
-      const selectedType = e.target.value;
-      const filtered = selectedType
-        ? allDevices.filter(d => d.device_type === selectedType)
-        : allDevices;
-      renderDeviceCards(filtered);
-    });
-
-    function fetchAndPlotDevices() {
-      allMarkers.forEach(marker => map.removeLayer(marker));
-      allMarkers = [];
-
-      fetch("/api/devices")
-        .then(res => res.json())
-        .then(devices => {
-          allDevices = devices;
-          updateTypeFilterOptions(devices);
-          renderDeviceCards(devices);
-
-          devices.forEach(device => {
-            const status = device.current_status || "";
-            if (device.latitude && device.longitude) {
-              const marker = L.marker(
-                [device.latitude, device.longitude],
-                { icon: createCustomIcon(status) }
-              ).addTo(map)
-                .bindPopup(`<b>${device.serial_number}</b><br>${device.current_location}`);
-              allMarkers.push(marker);
-            }
-          });
-        })
-        .catch(err => console.error('Error fetching devices:', err));
-    }
-
-    // 🔍 Serial search
-    const serialInput = document.getElementById("serialSearch");
-    const searchButton = document.getElementById("searchButton");
-
-    searchButton.addEventListener("click", () => {
-      const serial = serialInput.value.trim().toLowerCase();
-      if (!serial) return;
-
-      const matched = allMarkers.find(marker =>
-        marker.getPopup().getContent().toLowerCase().includes(serial)
-      );
-
-      if (matched) {
-        map.setView(matched.getLatLng(), 10);
-        matched.openPopup();
-        plotDeviceHistory(serial);
-      } else {
-        alert("Device not found.");
-      }
-    });
-
-    // 💡 Auto-complete serials
-    fetch('/api/device-serials')
-      .then(res => res.json())
-      .then(serials => {
-        const datalist = document.getElementById("serialOptions");
-        serials.forEach(s => {
-          const option = document.createElement("option");
-          option.value = s;
-          datalist.appendChild(option);
-        });
-      });
-
-    fetchAndPlotDevices();
-  </script>
- {% endblock %}
+</div>
+{% endblock %}

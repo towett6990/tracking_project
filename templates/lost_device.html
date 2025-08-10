@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container">
+  <h2 class="mb-3">Lost Device Tracker</h2>
+  <form method="POST" class="mb-4">
+    <input type="text" name="serial_number" placeholder="Enter Serial Number" required>
+    <button type="submit">Search</button>
+  </form>
+
+  {% if location %}
+    <h4>Device Details:</h4>
+    <p><strong>Serial:</strong> <span id="serial">{{ location.serial_number }}</span></p>
+    <p><strong>Last Seen:</strong> <span id="last_seen">{{ location.last_seen }}</span></p>
+    <p><strong>Latitude:</strong> <span id="lat">{{ location.latitude }}</span></p>
+    <p><strong>Longitude:</strong> <span id="lon">{{ location.longitude }}</span></p>
+
+    <div id="map" style="height: 500px;"></div>
+  {% endif %}
+</div>
+
+<!-- Leaflet.js CSS & JS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+{% if location %}
+<script>
+  const serial = document.getElementById('serial').innerText;
+  let lat = parseFloat(document.getElementById('lat').innerText);
+  let lon = parseFloat(document.getElementById('lon').innerText);
+
+  const map = L.map('map').setView([lat, lon], 15);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+  }).addTo(map);
+
+  let marker = L.marker([lat, lon]).addTo(map);
+  marker.bindPopup(`<b>Serial:</b> ${serial}<br><b>Last Seen:</b> ${document.getElementById('last_seen').innerText}`).openPopup();
+
+  // 🔁 Polling for updates every 5 seconds
+  setInterval(() => {
+    fetch(`/api/device_location/${serial}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.latitude && data.longitude) {
+          const newLat = data.latitude;
+          const newLon = data.longitude;
+          const newTime = data.last_seen;
+
+          // Update HTML values
+          document.getElementById('lat').innerText = newLat;
+          document.getElementById('lon').innerText = newLon;
+          document.getElementById('last_seen').innerText = newTime;
+
+          // Move the marker
+          marker.setLatLng([newLat, newLon]);
+          map.setView([newLat, newLon]);
+          marker.getPopup().setContent(`<b>Serial:</b> ${serial}<br><b>Last Seen:</b> ${newTime}`);
+        }
+      });
+  }, 5000); // Every 5 seconds
+</script>
+{% endif %}
+{% endblock %}
