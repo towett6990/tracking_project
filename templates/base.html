@@ -5,70 +5,36 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>{% block title %}Device Tracker{% endblock %}</title>
 
-  <!-- Bootstrap 5 Dark Theme -->
-  <link
-    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
-    rel="stylesheet"
-    integrity="sha384-Q2b3Y/LY5YyBQ19mQvC8/jBHyG9dQeYrA5IzOsYcWrR6TWFDImTgkYXkjZ6cL2gi"
-    crossorigin="anonymous"
-  />
+  <!-- Bootstrap Dark Theme -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" crossorigin="anonymous"/>
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
+
   <style>
-    body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background-color: #121212;
-      color: #f1f1f1;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-    }
-
-    .navbar {
-      margin-bottom: 2rem;
-    }
-
-    .container {
-      flex: 1;
-    }
-
-    footer {
-      background-color: #1e1e1e;
-      padding: 1rem 0;
-      text-align: center;
-      font-size: 0.9rem;
-      color: #aaa;
-    }
-
-    a {
-      color: #0d6efd;
-      text-decoration: none;
-    }
-
-    a:hover {
-      text-decoration: underline;
-    }
-
-    .navbar-brand img {
-      height: 40px;
-      vertical-align: middle;
-      margin-right: 8px;
-    }
+    body { background-color:#121212; color:#f1f1f1; min-height:100vh; display:flex; flex-direction:column; }
+    .container { flex:1; }
+    footer { background-color:#1e1e1e; padding:1rem 0; text-align:center; font-size:0.9rem; color:#aaa; }
+    a { color:#0d6efd; text-decoration:none; }
+    a:hover { text-decoration:underline; }
   </style>
 </head>
 <body>
   <!-- Navbar -->
   <nav class="navbar navbar-expand-lg navbar-dark bg-dark border-bottom shadow-sm">
     <div class="container-fluid">
-      <a class="navbar-brand d-flex align-items-center" href="{{ url_for('index') }}">
-        <img src="{{ url_for('static', filename='logo.png') }}" alt="DeviceTracker Logo">
+      <a class="navbar-brand" href="{{ url_for('index') }}">
+        <img src="{{ url_for('static', filename='logo.png') }}" alt="DeviceTracker Logo" style="height:40px; margin-right:8px;">
         DeviceTracker
       </a>
       <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
         <span class="navbar-toggler-icon"></span>
       </button>
-
       <div class="collapse navbar-collapse" id="navbarNav">
         <ul class="navbar-nav ms-auto">
-          {% if current_user.is_authenticated %}
+          <li class="nav-item"><a class="nav-link text-light" href="{{ url_for('pricing') }}">Pricing</a></li>
+          {% if current_user is defined and current_user.is_authenticated %}
             <li class="nav-item"><a class="nav-link" href="{{ url_for('index') }}">Dashboard</a></li>
             <li class="nav-item"><a class="nav-link" href="{{ url_for('add_device') }}">Add Device</a></li>
             <li class="nav-item"><a class="nav-link" href="{{ url_for('map_view') }}">Live Map</a></li>
@@ -83,21 +49,21 @@
     </div>
   </nav>
 
-  <!-- Main Content -->
-  <main class="container">
+  <!-- Main content -->
+  <main class="container mt-4">
     {% block content %}{% endblock %}
   </main>
 
   <!-- Footer -->
   <footer>
-    &copy; {{ current_year }} DeviceTracker | All rights reserved.
+    &copy; {{ current_year if current_year is defined else '' }} DeviceTracker | All rights reserved.
   </footer>
 
   <!-- Bootstrap JS -->
-  <script
-    src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"
-    integrity="sha384-QZKpZ4HkT0VJG+E1Xxw9lDU4shWODkINQmbBq+ryZzRHz8qO6Zos3I1HxOS+nB1t"
-    crossorigin="anonymous"
-  ></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
 </body>
 </html>

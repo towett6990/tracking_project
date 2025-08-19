@@ -8,6 +8,9 @@
         <th>Serial Number</th>
         <th>Status</th>
         <th>Location</th>
+        <th>Latitude</th>
+        <th>Longitude</th>
+        <th>Last Seen</th>
       </tr>
     </thead>
     <tbody>
@@ -16,6 +19,9 @@
         <td>{{ device.serial_number }}</td>
         <td>{{ device.status }}</td>
         <td>{{ device.location }}</td>
+        <td>{{ device.latitude or 'N/A' }}</td>
+        <td>{{ device.longitude or 'N/A' }}</td>
+        <td>{{ device.last_seen.strftime('%Y-%m-%d %H:%M:%S') if device.last_seen else 'Never' }}</td>
       </tr>
       {% endfor %}
     </tbody>

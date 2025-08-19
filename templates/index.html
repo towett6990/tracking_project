@@ -1,87 +1,60 @@
 {% extends 'base.html' %}
-
-{% block title %}Device Dashboard{% endblock %}
-
 {% block content %}
-<div class="container mt-5">
-  <h1 class="text-center mb-4 text-white">📋 My Devices</h1>
+<div class="container mt-4">
+  <h2 class="mb-3 text-light">Device List 📋</h2>
 
-  <!-- 🔍 Search Bar -->
-  <form method="GET" action="{{ url_for('index') }}" class="form-inline justify-content-center mb-4">
-    <input
-      type="text"
-      name="query"
-      class="form-control w-50"
-      placeholder="Search by Serial Number"
-      value="{{ request.args.get('query', '') }}"
-    />
-    <button type="submit" class="btn btn-primary ml-2">Search</button>
-  </form>
-
-  <!-- ✅ Devices Table -->
-  {% if devices %}
-  <div class="table-responsive">
-    <table class="table table-dark table-striped table-bordered">
-      <thead class="thead-light">
-        <tr>
-          <th>Serial Number</th>
-          <th>Make</th>
-          <th>Model</th>
-          <th>Type</th>
-          <th>Status</th>
-          <th>Location</th>
-          <th>Last Seen</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for device in devices %}
-        <tr>
-          <td>{{ device.serial_number }}</td>
-          <td>{{ device.make }}</td>
-          <td>{{ device.model }}</td>
-          <td>{{ device.device_type }}</td>
-          <td>{{ device.current_status }}</td>
-          <td>{{ device.current_location }}</td>
-          <td>
-            {% if device.last_seen %}
-              {{ device.last_seen.strftime('%Y-%m-%d %H:%M:%S') }}
-            {% else %}
-              Never
-            {% endif %}
-          </td>
-          <td>
-  <a href="{{ url_for('export_device_history', serial_number=device.serial_number) }}"
-     class="btn btn-sm btn-outline-info mb-1">
-    ⬇ Export
-  </a>
-  <a href="{{ url_for('map_view') }}#{{ device.serial_number }}" class="btn btn-sm btn-outline-info mb-1">
-    🗺️ View on Map
-  </a>
-  <a href="{{ url_for('edit_device', device_id=device.id) }}" class="btn btn-sm btn-outline-warning mb-1">
-    ✏️ Edit
-  </a>
-  <form method="POST"
-        action="{{ url_for('delete_device', device_id=device.id) }}"
-        style="display:inline;"
-        onsubmit="return confirm('Are you sure you want to delete this device?');">
-    <button type="submit" class="btn btn-sm btn-outline-danger">🗑️ Delete</button>
-  </form>
-</td>
-
-
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-  {% else %}
-  <p class="text-center text-white">No devices found. Try adding or searching again.</p>
-  {% endif %}
-
-  <!-- ➕ Add Device Shortcut -->
-  <div class="text-center mt-4">
-    <a href="{{ url_for('add_device') }}" class="btn btn-success">➕ Add New Device</a>
-  </div>
+  <table class="table table-dark table-hover table-striped align-middle shadow-lg rounded">
+    <thead class="thead-dark">
+      <tr>
+        <th>Serial Number</th>
+        <th>Status</th>
+        <th>Location</th>
+        <th>Latitude</th>
+        <th>Longitude</th>
+        <th>Last Seen</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for device in devices %}
+      <tr>
+        <td class="fw-bold">
+          <a href="{{ url_for('live_map', serial_number=device.serial_number) }}" class="text-decoration-none text-info">
+            {{ device.serial_number }}
+          </a>
+        </td>
+        <td>
+          {% if device.current_status == 'Active' %}
+            <span class="badge bg-success">🟢 Active</span>
+          {% elif device.current_status == 'Lost' %}
+            <span class="badge bg-danger">🔴 Lost</span>
+          {% elif device.current_status == 'Inactive' %}
+            <span class="badge bg-secondary">⚪ Inactive</span>
+          {% else %}
+            <span class="badge bg-warning text-dark">🟡 Unknown</span>
+          {% endif %}
+        </td>
+        <td>{{ device.current_location }}</td>
+        <td>{{ device.latitude or 'N/A' }}</td>
+        <td>{{ device.longitude or 'N/A' }}</td>
+        <td>{{ device.last_seen.strftime('%Y-%m-%d %H:%M:%S') if device.last_seen else 'Never' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
 </div>
+
+<style>
+  .table {
+    border-radius: 0.75rem;
+    overflow: hidden;
+  }
+  .badge {
+    font-size: 0.9rem;
+    padding: 0.4em 0.6em;
+  }
+  body {
+    background-color: #121212;
+    color: white;
+  }
+</style>
 {% endblock %}

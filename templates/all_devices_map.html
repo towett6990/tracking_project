@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+
+{% block title %}All Devices Live Map{% endblock %}
+
+{% block content %}
+<div id="map" style="height: 80vh; width: 100%;"></div>
+
+<style>
+/* Ensure the geocoder input is visible and on top */
+.leaflet-control-geocoder {
+    z-index: 1000 !important;
+    background-color: white;
+    border-radius: 4px;
+    padding: 4px;
+}
+.leaflet-control-geocoder-form input {
+    width: 250px !important;
+}
+</style>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    // Initialize map
+    var map = L.map('map', { center: [0, 0], zoom: 2, maxZoom: 28 });
+
+    // Base layers
+    var osm = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 19, attribution: "© OpenStreetMap"
+    });
+    var esri = L.tileLayer(
+        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+        maxZoom: 28, attribution: "Tiles © Esri"
+    });
+    esri.addTo(map);
+
+    // Layer toggle
+    L.control.layers({ "OpenStreetMap": osm, "Esri Satellite": esri }).addTo(map);
+
+    // Add search bar
+    L.Control.geocoder({
+        defaultMarkGeocode: true,
+        placeholder: 'Search for a place...',
+        showResultIcons: true
+    }).addTo(map);
+
+    // Store markers by serial number
+    var markers = {};
+
+    async function loadDevices() {
+        try {
+            let res = await fetch('/api/devices');
+            let devices = await res.json();
+
+            let bounds = [];
+
+            devices.forEach(device => {
+                if (device.latitude && device.longitude) {
+                    let coords = [device.latitude, device.longitude];
+                    bounds.push(coords);
+
+                    if (markers[device.serial_number]) {
+                        markers[device.serial_number].setLatLng(coords);
+                        markers[device.serial_number].getPopup().setContent(
+                            `<b>${device.name}</b><br>Serial: ${device.serial_number}<br>Last Seen: ${device.last_seen}`
+                        );
+                    } else {
+                        let marker = L.marker(coords).addTo(map);
+                        marker.bindPopup(
+                            `<b>${device.name}</b><br>Serial: ${device.serial_number}<br>Last Seen: ${device.last_seen}`
+                        );
+                        markers[device.serial_number] = marker;
+                    }
+                }
+            });
+
+            // Fit map to all markers
+            if(bounds.length > 0) {
+                map.fitBounds(bounds, { padding: [50, 50] });
+            }
+
+        } catch (err) {
+            console.error("Error loading devices:", err);
+        }
+    }
+
+    // Initial load & auto-refresh every 5s
+    loadDevices();
+    setInterval(loadDevices, 5000);
+});
+</script>
+{% endblock %}

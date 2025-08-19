@@ -1,42 +1,97 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>All Devices Map</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <style>
-        #map { height: 600px; width: 100%; margin-top: 20px; }
-    </style>
+  <meta charset="UTF-8">
+  <title>Device Live Map</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <style>
+    body {
+      margin: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background: #111;
+      color: #eee;
+      font-family: Arial, sans-serif;
+    }
+    header {
+      padding: 10px;
+      background: #222;
+      text-align: center;
+      font-size: 20px;
+      font-weight: bold;
+    }
+    #map {
+      flex: 1;
+      width: 100%;
+    }
+  </style>
 </head>
-<body>
-    <h2>Device Location Dashboard</h2>
-    <div id="map"></div>
+<body data-serial="{{ device.serial_number if device else '' }}">
+  <header>
+    Live Device Tracking
+  </header>
+  <div id="map"></div>
 
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script>
-        fetch("/api/devices")
-            .then(res => res.json())
-            .then(devices => {
-                const map = L.map('map').setView([0.0236, 37.9062], 6); // Centered on Kenya
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script>
+    // Initialize the map
+    var map = L.map("map", { center: [0,0], zoom: 2, maxZoom: 22 });
 
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                    attribution: '© OpenStreetMap contributors'
-                }).addTo(map);
+    // Tile layers
+    var osm = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: "© OpenStreetMap"
+    });
+    var esri = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+      maxZoom: 22,
+      attribution: "Tiles © Esri"
+    });
 
-                devices.forEach(device => {
-                    if (device.latitude && device.longitude) {
-                        L.marker([device.latitude, device.longitude])
-                            .addTo(map)
-                            .bindPopup(`
-                                <strong>${device.make} ${device.model}</strong><br>
-                                Serial: ${device.serial_number}<br>
-                                Location: ${device.current_location}<br>
-                                Status: ${device.current_status}
-                            `);
-                    }
-                });
-            })
-            .catch(err => console.error("Error loading map data:", err));
-    </script>
+    esri.addTo(map);
+    L.control.layers({ "OpenStreetMap": osm, "Esri Satellite": esri }).addTo(map);
+
+    // Marker placeholder (invisible until we have coords)
+    var marker = L.marker([0,0], { opacity: 0 }).addTo(map);
+
+    // Get serial number from body attribute
+    const serial = document.body.dataset.serial;
+
+    // Function to update position
+    function updatePosition(d, zoomOnFirst=true) {
+      if (!d || d.error || d.latitude == null || d.longitude == null) return;
+      const lat = d.latitude, lng = d.longitude;
+
+      marker.setLatLng([lat, lng]).setOpacity(1)
+        .bindPopup(`Serial: ${serial}<br>Last seen: ${d.last_seen || 'n/a'}`);
+
+      if (zoomOnFirst) {
+        map.setView([lat, lng], 20); // Zoom close initially
+      } else {
+        const currentZoom = map.getZoom();
+        if (currentZoom >= 19) {
+          map.panTo([lat, lng], { animate: true, duration: 0.5 });
+        } else {
+          map.setView([lat, lng], 20);
+        }
+      }
+    }
+
+    // Initial fetch
+    if (serial) {
+      fetch(`/api/device_location/${encodeURIComponent(serial)}`)
+        .then(r => r.json())
+        .then(d => updatePosition(d, true))
+        .catch(console.error);
+
+      // Poll every 3s
+      setInterval(() => {
+        fetch(`/api/device_location/${encodeURIComponent(serial)}`)
+          .then(r => r.json())
+          .then(d => updatePosition(d, false))
+          .catch(console.error);
+      }, 3000);
+    }
+  </script>
 </body>
 </html>

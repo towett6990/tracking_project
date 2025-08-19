@@ -4,17 +4,25 @@ from flask_migrate import Migrate
 from flask_login import LoginManager, login_user, login_required, logout_user, current_user, UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timezone
+from flask_login import LoginManager, current_user
 import os
 import json
-
+import stripe
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'fallback-key')
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'fallback-secret')
 
-instance_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'instance')
-os.makedirs(instance_path, exist_ok=True)
+# Detect if DATABASE_URL is set (Render will set it)
+database_url = os.environ.get('DATABASE_URL')
+if database_url:
+    # Fix old-style postgres:// to postgresql://
+    app.config['SQLALCHEMY_DATABASE_URI'] = database_url.replace("postgres://", "postgresql://", 1)
+else:
+    # Local SQLite setup
+    instance_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'instance')
+    os.makedirs(instance_path, exist_ok=True)
+    db_path = os.path.join(instance_path, 'devices.db')
+    app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
 
-db_path = os.path.join(instance_path, 'devices.db')
-app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
@@ -22,27 +30,39 @@ migrate = Migrate(app, db)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 
+@app.context_processor
+def inject_user_and_year():
+    from flask_login import current_user
+    from datetime import datetime
+    return dict(current_user=current_user, current_year=datetime.now().year)
+
+
 # ===================== MODELS =====================
-class User(UserMixin, db.Model):
+class User(db.Model, UserMixin):
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(150), unique=True, nullable=False)
-    email = db.Column(db.String(150), unique=True, nullable=False)
-    password = db.Column(db.String(200), nullable=False)
-    devices = db.relationship('Device', backref='user', lazy=True)
+    username = db.Column(db.String(150), nullable=False, unique=True)
+    email = db.Column(db.String(150), nullable=False, unique=True)
+    password = db.Column(db.String(256), nullable=False)
+    plan = db.Column(db.String(20), default="free")  # "free", "basic", "pro"
+
 
 class Device(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     serial_number = db.Column(db.String(100), nullable=False)
+    name = db.Column(db.String(100), nullable=False)
     make = db.Column(db.String(100), nullable=False)
     model = db.Column(db.String(100), nullable=False)
     device_type = db.Column(db.String(100), nullable=False)
     current_status = db.Column(db.String(100), nullable=False)
     current_location = db.Column(db.String(100), nullable=False)
+    os_version = db.Column(db.String(100))   # ✅ NEW FIELD
     latitude = db.Column(db.Float)
     longitude = db.Column(db.Float)
     last_updated = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     last_seen = db.Column(db.DateTime)
+
+
 
     def to_dict(self):
         return {
@@ -113,6 +133,51 @@ def export_device_history(serial_number):
                     headers={"Content-Disposition": f"attachment;filename={serial_number}_history.csv"})
 
 
+stripe.api_key = os.getenv("STRIPE_SECRET_KEY") or "your_test_key_here"
+
+@app.route("/checkout/<plan>")
+@login_required
+def checkout(plan):
+    try:
+        if plan == "basic":
+            price = 200  # KES 200
+        elif plan == "pro":
+            price = 500  # KES 500
+        else:
+            flash("Invalid plan")
+            return redirect(url_for("pricing"))
+
+        # Create Stripe Checkout session
+        session = stripe.checkout.Session.create(
+            payment_method_types=["card"],
+            line_items=[{
+                "price_data": {
+                    "currency": "kes",  # or "usd"
+                    "product_data": {"name": f"{plan.capitalize()} Plan"},
+                    "unit_amount": price * 100,  # Stripe uses cents
+                },
+                "quantity": 1,
+            }],
+            mode="payment",
+            success_url=url_for("payment_success", plan=plan, _external=True),
+            cancel_url=url_for("pricing", _external=True),
+        )
+
+        return redirect(session.url, code=303)
+
+    except Exception as e:
+        return str(e), 400
+
+
+@app.route("/payment_success/<plan>")
+@login_required
+def payment_success(plan):
+    current_user.plan = plan
+    db.session.commit()
+    flash(f"✅ Payment successful! You are now on the {plan.capitalize()} Plan.")
+    return redirect(url_for("dashboard"))
+
+
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
@@ -128,6 +193,12 @@ def register():
         db.session.commit()
         return redirect(url_for('login'))
     return render_template('register.html')
+
+@app.route("/live_map/<serial_number>")
+@login_required
+def live_map(serial_number):
+    device = Device.query.filter_by(serial_number=serial_number).first_or_404()
+    return render_template("live_map.html", device=device)
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -162,6 +233,60 @@ def edit_device(device_id):
 
     return render_template('edit_device.html', device=device)
 
+@app.route("/api/register_device", methods=["POST"])
+def api_register_device():
+    data = request.json
+    try:
+        serial_number = data.get("serial_number")
+        name = data.get("name")
+        make = data.get("make")
+        model = data.get("model")
+        device_type = data.get("device_type")
+        current_status = data.get("current_status")
+        current_location = data.get("current_location")
+        latitude = data.get("latitude")
+        longitude = data.get("longitude")
+        user_id = data.get("user_id")
+
+        timestamp = datetime.now(timezone.utc)
+
+        new_device = Device(
+            serial_number=serial_number,
+            name=name,
+            make=make,
+            model=model,
+            device_type=device_type,
+            current_status=current_status,
+            current_location=current_location,
+            latitude=latitude,
+            longitude=longitude,
+            user_id=user_id,
+            last_seen=timestamp
+        )
+
+        db.session.add(new_device)
+        db.session.commit()
+
+        return jsonify({"message": "Device registered successfully"}), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+    # Create new device
+    new_device = Device(
+        serial_number=serial_number,
+        make=make,
+        model=model,
+        device_type=device_type,
+        os_version=os_version,
+        app_version=app_version,
+        last_seen=timestamp
+    )
+    db.session.add(new_device)
+    db.session.commit()
+    return jsonify({"message": "Device registered successfully"}), 201
+
 
 @app.route('/delete_device/<int:device_id>', methods=['POST'])
 @login_required
@@ -183,27 +308,38 @@ def logout():
     logout_user()
     return redirect(url_for('login'))
 
-@app.route('/add_device', methods=['GET', 'POST'])
+@app.route("/add_device", methods=["GET", "POST"])
 @login_required
 def add_device():
+    device_limit = {
+        "free": 1,
+        "basic": 5,
+        "pro": None  # unlimited
+    }
+
+    current_devices = Device.query.filter_by(user_id=current_user.id).count()
+    limit = device_limit.get(current_user.plan)
+
+    if limit is not None and current_devices >= limit:
+        flash(f"⚠️ Your {current_user.plan.capitalize()} Plan allows only {limit} devices. Upgrade for more!")
+        return redirect(url_for("dashboard"))
+
     if request.method == 'POST':
-        serial_number = request.form['serial_number']
-        existing = Device.query.filter_by(serial_number=serial_number, user_id=current_user.id).first()
-        if existing:
-            flash('Device already exists')
-            return redirect(url_for('add_device'))
-        device = Device(
+        serial_number = request.form.get('serial_number')
+        name = request.form.get('name')  # ✅ Get device name
+        latitude = request.form.get('latitude')
+        longitude = request.form.get('longitude')
+
+        new_device = Device(
             serial_number=serial_number,
-            make=request.form['make'],
-            model=request.form['model'],
-            device_type=request.form['type'],
-            current_status=request.form['status'],
-            current_location=request.form['location'],
-            user_id=current_user.id
+            name=name,
+            latitude=latitude,
+            longitude=longitude
         )
-        db.session.add(device)
+        db.session.add(new_device)
         db.session.commit()
-        return redirect(url_for('index'))
+        flash('Device added successfully', 'success')
+        return redirect(url_for('device_list'))
     return render_template('add_device.html')
 
 @app.route('/search_device', methods=['POST'])
@@ -220,32 +356,84 @@ def map_view():
     return render_template('map.html', devices=devices)
 
 # ===================== API ROUTES =====================
-@app.route('/api/devices', methods=['GET'])
+@app.route('/api/devices')
 @login_required
-def get_devices():
-    devices = Device.query.filter_by(user_id=current_user.id).all()
-    return jsonify([d.to_dict() for d in devices])
+def api_devices():
+    devices = Device.query.all()
 
-from datetime import datetime  # ✅ Make sure this import is near the top if not already there
+    def get_status(device):
+        if device.last_seen:
+            if datetime.now(timezone.utc) - device.last_seen <= timedelta(minutes=5):
+                return "online"
+        return "offline"
+
+    devices_data = []
+    for d in devices:
+        devices_data.append({
+            "id": d.id,
+            "name": d.name,
+            "serial_number": d.serial_number,
+            "latitude": d.latitude,
+            "longitude": d.longitude,
+            "last_seen": d.last_seen.isoformat() if d.last_seen else None,
+            "status": get_status(d)
+        })
+
+    return jsonify(devices_data)
 
 
-@app.route('/api/report_location', methods=['POST'])
-def report_location():
-    data = request.get_json()
-    if not data:
-        return jsonify({'error': 'Invalid JSON'}), 400
+@app.route("/api/report_location", methods=["POST"])
+def api_report_location():
+    data = request.json
+    serial_number = data.get("serial_number")
+    latitude = data.get("latitude")
+    longitude = data.get("longitude")
+    last_seen = data.get("last_seen")
+    current_location = data.get("current_location")
+    current_status = data.get("current_status")
 
-    serial = data.get('serial_number')
-    lat = data.get('latitude')
-    lon = data.get('longitude')
+    device = Device.query.filter_by(serial_number=serial_number).first()
+    if device:
+        device.latitude = latitude
+        device.longitude = longitude
+        device.last_seen = datetime.fromisoformat(last_seen)
+        device.current_location = current_location
+        device.current_status = current_status
+        db.session.commit()
+        return jsonify({"message": "Location updated"}), 200
+    else:
+        return jsonify({"error": "Device not found"}), 404
 
-    if not serial or lat is None or lon is None:
-        return jsonify({'error': 'Missing fields'}), 400
 
-    # 📍 Save or process the location here
-    print(f"Received location for {serial}: ({lat}, {lon})")
 
-    return jsonify({'message': 'Location received'}), 200
+@app.route('/api/live_locations')
+def live_locations():
+    devices = Device.query.all()
+    data = [
+        {
+            'serial_number': d.serial_number,
+            'latitude': d.latitude,
+            'longitude': d.longitude,
+            'last_seen': d.last_seen.strftime('%Y-%m-%d %H:%M:%S') if d.last_seen else None
+        }
+        for d in devices
+        if d.latitude is not None and d.longitude is not None
+    ]
+    return jsonify(data)
+
+@app.route("/api/all_devices")
+def all_devices():
+    devices = Device.query.all()
+    data = []
+    for d in devices:
+        if d.latitude is not None and d.longitude is not None:
+            data.append({
+                "serial_number": d.serial_number,
+                "latitude": d.latitude,
+                "longitude": d.longitude,
+                "last_seen": d.last_seen.isoformat() if d.last_seen else None
+            })
+    return jsonify(data)
 
 
 @app.route('/api/send_command', methods=['POST'])
@@ -296,6 +484,11 @@ def lost_device():
             flash('Device not found or not registered.')
     return render_template('lost_device.html')
 
+@app.route("/pricing")
+def pricing():
+    return render_template("pricing.html")
+
+
 @app.route('/api/device_location/<serial_number>', methods=['GET'])
 def get_device_location(serial_number):
     device = Device.query.filter_by(serial_number=serial_number).first()
@@ -306,6 +499,12 @@ def get_device_location(serial_number):
             'last_seen': device.last_seen.isoformat() if device.last_seen else None
         })
     return jsonify({'error': 'Device not found'}), 404
+
+@app.route("/dashboard")
+@login_required
+def dashboard():
+    devices = Device.query.filter_by(user_id=current_user.id).all()
+    return render_template("dashboard.html", user=current_user, devices=devices)
 
 
 @app.route('/api/command_ack', methods=['POST'])
@@ -318,6 +517,24 @@ def command_ack():
     cmd.executed_at = datetime.now(timezone.utc)
     db.session.commit()
     return jsonify({'message': 'Command acknowledged'})
+@app.route("/diagnostics")
+def diagnostics():
+    info = {}
+    info["SECRET_KEY_set"] = bool(os.environ.get("SECRET_KEY"))
+    info["DATABASE_URL_set"] = bool(os.environ.get("DATABASE_URL"))
+    info["database_uri"] = app.config["SQLALCHEMY_DATABASE_URI"]
+
+    # Try database connection
+    try:
+        from sqlalchemy import text
+        with db.engine.connect() as conn:
+            result = conn.execute(text("SELECT NOW()")).scalar()
+        info["database_connection"] = "OK"
+        info["current_time_in_db"] = str(result)
+    except Exception as e:
+        info["database_connection"] = f"FAILED - {e}"
+
+    return jsonify(info)
 
 # ===================== RUN =====================
 if __name__ == '__main__':

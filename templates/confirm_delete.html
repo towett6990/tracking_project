@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+
+{% block title %}Delete Device - Device Tracker{% endblock %}
+
+{% block content %}
+<div class="container text-center">
+  <h2 class="mb-4 text-danger">Delete Device</h2>
+  <p>Are you sure you want to permanently delete <strong>{{ device.name }}</strong> (Serial: {{ device.serial_number }})?</p>
+
+  <form method="POST" action="{{ url_for('delete_device', device_id=device.id) }}">
+    <button type="submit" class="btn btn-danger">Yes, Delete</button>
+    <a href="{{ url_for('index') }}" class="btn btn-secondary">Cancel</a>
+  </form>
+</div>
+{% endblock %}

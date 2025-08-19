@@ -1,64 +1,99 @@
-{% extends 'base.html' %}
-
-{% block content %}
-<div class="container">
-  <h2 class="mb-3">Lost Device Tracker</h2>
-  <form method="POST" class="mb-4">
-    <input type="text" name="serial_number" placeholder="Enter Serial Number" required>
-    <button type="submit">Search</button>
-  </form>
-
-  {% if location %}
-    <h4>Device Details:</h4>
-    <p><strong>Serial:</strong> <span id="serial">{{ location.serial_number }}</span></p>
-    <p><strong>Last Seen:</strong> <span id="last_seen">{{ location.last_seen }}</span></p>
-    <p><strong>Latitude:</strong> <span id="lat">{{ location.latitude }}</span></p>
-    <p><strong>Longitude:</strong> <span id="lon">{{ location.longitude }}</span></p>
-
-    <div id="map" style="height: 500px;"></div>
-  {% endif %}
-</div>
-
-<!-- Leaflet.js CSS & JS -->
-<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-
-{% if location %}
-<script>
-  const serial = document.getElementById('serial').innerText;
-  let lat = parseFloat(document.getElementById('lat').innerText);
-  let lon = parseFloat(document.getElementById('lon').innerText);
-
-  const map = L.map('map').setView([lat, lon], 15);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19,
-  }).addTo(map);
-
-  let marker = L.marker([lat, lon]).addTo(map);
-  marker.bindPopup(`<b>Serial:</b> ${serial}<br><b>Last Seen:</b> ${document.getElementById('last_seen').innerText}`).openPopup();
-
-  // 🔁 Polling for updates every 5 seconds
-  setInterval(() => {
-    fetch(`/api/device_location/${serial}`)
-      .then(res => res.json())
-      .then(data => {
-        if (data.latitude && data.longitude) {
-          const newLat = data.latitude;
-          const newLon = data.longitude;
-          const newTime = data.last_seen;
-
-          // Update HTML values
-          document.getElementById('lat').innerText = newLat;
-          document.getElementById('lon').innerText = newLon;
-          document.getElementById('last_seen').innerText = newTime;
-
-          // Move the marker
-          marker.setLatLng([newLat, newLon]);
-          map.setView([newLat, newLon]);
-          marker.getPopup().setContent(`<b>Serial:</b> ${serial}<br><b>Last Seen:</b> ${newTime}`);
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lost Device Tracker</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <style>
+        body {
+            background-color: #121212;
+            color: #f0f0f0;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            text-align: center;
         }
-      });
-  }, 5000); // Every 5 seconds
-</script>
-{% endif %}
-{% endblock %}
+        h2 {
+            margin-top: 20px;
+        }
+        form {
+            margin: 20px;
+        }
+        input[type="text"] {
+            padding: 10px;
+            width: 250px;
+            border-radius: 8px;
+            border: none;
+        }
+        button {
+            padding: 10px 15px;
+            border: none;
+            border-radius: 8px;
+            background-color: #1e88e5;
+            color: white;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #1565c0;
+        }
+        #map {
+            height: 600px;
+            width: 100%;
+            margin-top: 20px;
+            border-radius: 12px;
+        }
+    </style>
+</head>
+<body>
+    <h2>Lost Device Tracker</h2>
+    <form method="GET" action="/lost_device">
+        <input type="text" name="serial_number" placeholder="Enter Serial Number" required>
+        <button type="submit">Search</button>
+    </form>
+
+    {% if device %}
+        <h3>Device: {{ device.name }} ({{ device.serial_number }})</h3>
+        <p>Last seen: {{ device.timestamp }}</p>
+        <div id="map"></div>
+    {% else %}
+        {% if request.args.get("serial_number") %}
+            <p>No device found with that serial number.</p>
+        {% endif %}
+    {% endif %}
+
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    {% if device %}
+    <script>
+        // Init map
+        var map = L.map('map').setView([{{ device.latitude }}, {{ device.longitude }}], 18);
+
+        // Base street map
+        var baseMap = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '© OpenStreetMap'
+        }).addTo(map);
+
+        // Satellite map
+        var satellite = L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+            maxZoom: 20,
+            attribution: '© Google'
+        });
+
+        // Toggle layers
+        L.control.layers({
+            "Street Map": baseMap,
+            "Satellite": satellite
+        }).addTo(map);
+
+        // Add marker
+        var marker = L.marker([{{ device.latitude }}, {{ device.longitude }}]).addTo(map)
+            .bindPopup("<b>{{ device.name }}</b><br>Serial: {{ device.serial_number }}<br>Last seen: {{ device.timestamp }}")
+            .openPopup();
+
+        // Auto zoom & re-center
+        map.setView([{{ device.latitude }}, {{ device.longitude }}], 18);
+    </script>
+    {% endif %}
+</body>
+</html>

@@ -1,0 +1,101 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-4">
+  <h2 class="mb-3 text-light">Live Tracking for Device: {{ device.serial_number }}</h2>
+  <div id="map" style="height: 500px; border-radius: 10px;"></div>
+</div>
+
+<!-- Leaflet.js CSS & JS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+<script>
+    var map = L.map('map').setView([0.0, 0.0], 2);
+
+    var liveFeed = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '© OpenStreetMap'
+    });
+
+    var satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/' +
+        'World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Tiles © Esri'
+    });
+
+    liveFeed.addTo(map);
+
+    var baseMaps = {
+        "Live Feed": liveFeed,
+        "Satellite": satellite
+    };
+    L.control.layers(baseMaps).addTo(map);
+
+    var deviceMarkers = {};
+    var firstLoad = true;
+
+    async function loadDevices() {
+        try {
+            let res = await fetch('/api/devices');
+            let devices = await res.json();
+
+            let bounds = [];
+
+            devices.forEach(device => {
+                if (device.latitude && device.longitude) {
+                    let latLng = [device.latitude, device.longitude];
+                    bounds.push(latLng);
+
+                    if (deviceMarkers[device.serial_number]) {
+                        deviceMarkers[device.serial_number]
+                            .setLatLng(latLng)
+                            .setPopupContent(`<b>${device.name}</b><br>Serial: ${device.serial_number}<br>Last Seen: ${device.last_seen}`);
+                    } else {
+                        let marker = L.marker(latLng).addTo(map);
+                        marker.bindPopup(`<b>${device.name}</b><br>Serial: ${device.serial_number}<br>Last Seen: ${device.last_seen}`);
+                        deviceMarkers[device.serial_number] = marker;
+                    }
+                }
+            });
+
+            // Auto-fit map on first load or if a device moved far
+            if (bounds.length > 0 && (firstLoad || hasMoved(bounds))) {
+                map.fitBounds(bounds, { padding: [50, 50] });
+                firstLoad = false;
+            }
+
+        } catch (err) {
+            console.error('Error loading devices:', err);
+        }
+    }
+
+    // Track last positions to detect large movement
+    var lastBounds = [];
+    function hasMoved(newBounds) {
+        if (lastBounds.length !== newBounds.length) {
+            lastBounds = newBounds;
+            return true;
+        }
+        for (let i = 0; i < newBounds.length; i++) {
+            if (Math.abs(newBounds[i][0] - lastBounds[i][0]) > 0.001 ||
+                Math.abs(newBounds[i][1] - lastBounds[i][1]) > 0.001) {
+                lastBounds = newBounds;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    loadDevices();
+    setInterval(loadDevices, 5000);
+</script>
+
+
+
+<style>
+  body {
+    background-color: #121212;
+    color: white;
+  }
+  #map {
+    box-shadow: 0 0 15px rgba(0,0,0,0.5);
+  }
+</style>
+{% endblock %}

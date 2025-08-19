@@ -1,277 +1,136 @@
-#!/usr/bin/env python3
-"""
-Mobile Client Component for Device Tracking System
-This component would be installed on mobile devices to enable tracking
-"""
-
-import json
+import requests
+import uuid
 import time
 import threading
-import requests
-from datetime import datetime
-import hashlib
-import uuid
+from datetime import datetime, timezone
+import random
 
-class DeviceTracker:
-    def __init__(self, server_url="http://127.0.0.1:5000", device_serial=None):
+class MobileClient:
+    def __init__(self, server_url):
         self.server_url = server_url
-        self.device_serial = device_serial or self.generate_device_serial()
-        self.is_running = False
-        self.tracking_thread = None
-        self.last_location = None
-        self.device_info = self.get_device_info()
-        
-    def generate_device_serial(self):
-        """Generate unique device serial number"""
-        # In real implementation, this would be hardware-based
-        mac_address = uuid.getnode()
-        device_id = hashlib.md5(str(mac_address).encode()).hexdigest()[:12].upper()
-        return f"DEV-{device_id}"
-    
-    def get_device_info(self):
-        """Get device information"""
-        # In real implementation, this would query actual device specs
-        return {
-            "serial_number": self.device_serial,
-            "make": "TestPhone",
-            "model": "TrackPro X1",
-            "device_type": "Smartphone",
-            "os_version": "Android 14",
-            "app_version": "1.0.0"
-        }
-    
+        self.device_serial = f"DEV-{uuid.uuid4().hex[:10].upper()}"
+        self.running = False
+        self.thread = None
+
     def get_current_location(self):
-        """Simulate getting current GPS location"""
-        # In real implementation, this would use actual GPS/network location
-        import random
-        
-        # Simulate GPS coordinates with slight movement
-        if self.last_location:
-            lat = self.last_location['latitude'] + random.uniform(-0.0001, 0.0001)
-            lon = self.last_location['longitude'] + random.uniform(-0.0001, 0.0001)
-        else:
-            # Default to New York area for demo
-            lat = 40.7128 + random.uniform(-0.01, 0.01)
-            lon = -74.0060 + random.uniform(-0.01, 0.01)
-        
-        location = {
-            "latitude": lat,
-            "longitude": lon,
-            "accuracy": random.uniform(5, 50),  # meters
-            "timestamp": datetime.utcnow().isoformat(),
-            "method": "GPS"  # GPS, Network, Passive
+        """Simulate getting GPS coordinates"""
+        latitude = -1.286389 + random.uniform(-0.001, 0.001)
+        longitude = 36.817223 + random.uniform(-0.001, 0.001)
+        return {
+            "latitude": round(latitude, 6),
+            "longitude": round(longitude, 6),
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
-        
-        self.last_location = location
-        return location
-    
+
     def register_device(self):
-        """Register device with tracking server"""
+        """Register device with server"""
+        device_data = {
+            "serial_number": self.device_serial,
+            "name": "Test Phone",
+            "make": "Generic",
+            "model": "Simulated GPS",
+            "device_type": "Phone",
+            "current_status": "Active",
+            "current_location": "Initial Registration",
+            "latitude": None,
+            "longitude": None,
+            "user_id": 1
+        }
+
+        print("Registering device...")
         try:
-            location = self.get_current_location()
-            
-            registration_data = {
-                "serial_number": self.device_serial,
-                "make": self.device_info["make"],
-                "model": self.device_info["model"],
-                "device_type": self.device_info["device_type"],
-                "current_status": "Active",
-                "current_location": f"Auto-registered at {location['timestamp']}",
-                "latitude": location["latitude"],
-                "longitude": location["longitude"],
-                "device_info": self.device_info
-            }
-            
             response = requests.post(
                 f"{self.server_url}/api/register_device",
-                json=registration_data,
+                json=device_data,
                 timeout=10
             )
-            
             if response.status_code == 200:
                 print(f"✅ Device registered: {self.device_serial}")
                 return True
             else:
                 print(f"❌ Registration failed: {response.status_code}")
+                print(response.text)
                 return False
-                
         except Exception as e:
-            print(f"❌ Registration error: {e}")
+            print(f"❌ Error registering device: {e}")
             return False
-    
+
     def report_location(self):
-        """Report current location to server"""
+        """Send location update to tracking server"""
         try:
             location = self.get_current_location()
-            
-            report_data = {
+            update_data = {
                 "serial_number": self.device_serial,
                 "latitude": location["latitude"],
                 "longitude": location["longitude"],
-                "accuracy": location["accuracy"],
-                "method": location["method"],
-                "battery_level": self.get_battery_level(),
-                "network_type": self.get_network_type()
+                "last_seen": datetime.now(timezone.utc).isoformat(),
+                "current_location": f"Updated at {location['timestamp']}",
+                "current_status": "Active"
             }
-            
+
             response = requests.post(
                 f"{self.server_url}/api/report_location",
-                json=report_data,
-                timeout=5
+                json=update_data,
+                timeout=10
             )
-            
-            if response.status_code == 200:
-                print(f"📍 Location reported: ({location['latitude']:.6f}, {location['longitude']:.6f})")
-                return True
-            else:
-                print(f"❌ Location report failed: {response.status_code}")
-                return False
-                
-        except Exception as e:
-            print(f"❌ Location report error: {e}")
-            return False
-    
-    def get_battery_level(self):
-        """Simulate battery level"""
-        import random
-        return random.randint(20, 100)
-    
-    def get_network_type(self):
-        """Simulate network type"""
-        import random
-        return random.choice(["WiFi", "4G", "5G", "3G"])
-    
-    def check_for_commands(self):
-        """Check for remote commands from server"""
-        try:
-            response = requests.get(
-                f"{self.server_url}/api/device_commands/{self.device_serial}",
-                timeout=5
-            )
-            
-            if response.status_code == 200:
-                commands = response.json()
-                for command in commands:
-                    self.execute_command(command)
-                return True
-            return False
-            
-        except Exception as e:
-            print(f"❌ Command check error: {e}")
-            return False
-    
-    def execute_command(self, command):
-        """Execute remote command"""
-        cmd_type = command.get("type")
-        
-        if cmd_type == "ping":
-            print("📡 Received PING command - responding...")
-            self.report_location()
-        
-        elif cmd_type == "locate":
-            print("🎯 Received LOCATE command - sending precise location...")
-            # Send high-accuracy location
-            self.report_location()
-        
-        elif cmd_type == "alert":
-            print("🚨 Received ALERT command - device would beep/vibrate...")
-            # In real implementation: trigger sound/vibration
-        
-        elif cmd_type == "lock":
-            print("🔒 Received LOCK command - device would be locked...")
-            # In real implementation: lock device
-        
-        elif cmd_type == "wipe":
-            print("💥 Received WIPE command - device would be wiped...")
-            # In real implementation: secure wipe (with proper safeguards)
-        
-        # Acknowledge command execution
-        try:
-            requests.post(
-                f"{self.server_url}/api/command_ack",
-                json={
-                    "serial_number": self.device_serial,
-                    "command_id": command.get("id"),
-                    "status": "executed",
-                    "timestamp": datetime.utcnow().isoformat()
-                },
-                timeout=5
-            )
-        except:
-            pass
-    
-    def tracking_loop(self):
-        """Main tracking loop"""
-        print(f"🔄 Starting tracking for device: {self.device_serial}")
-        
-        while self.is_running:
-            try:
-                # Report location every 30 seconds
-                self.report_location()
-                
-                # Check for commands every 10 seconds
-                self.check_for_commands()
-                
-                # Sleep for 10 seconds
-                time.sleep(10)
-                
-            except KeyboardInterrupt:
-                print("🛑 Tracking stopped by user")
-                break
-            except Exception as e:
-                print(f"❌ Tracking error: {e}")
-                time.sleep(30)  # Wait longer on error
-    
-    def start_tracking(self):
-        """Start background tracking"""
-        if not self.is_running:
-            self.is_running = True
-            self.tracking_thread = threading.Thread(target=self.tracking_loop)
-            self.tracking_thread.daemon = True
-            self.tracking_thread.start()
-            print("✅ Tracking started")
-    
-    def stop_tracking(self):
-        """Stop background tracking"""
-        self.is_running = False
-        if self.tracking_thread:
-            self.tracking_thread.join(timeout=5)
-        print("🛑 Tracking stopped")
-    
-    def emergency_mode(self):
-        """Emergency tracking mode - more frequent updates"""
-        print("🚨 EMERGENCY MODE ACTIVATED")
-        
-        while True:
-            try:
-                self.report_location()
-                self.check_for_commands()
-                time.sleep(5)  # Report every 5 seconds in emergency
-            except KeyboardInterrupt:
-                break
 
-# Demo usage
+            if response.status_code == 200:
+                print(f"📍 Location updated: {location['latitude']}, {location['longitude']}")
+            else:
+                print(f"❌ Location update failed: {response.status_code}")
+                print(response.text)
+
+        except Exception as e:
+            print(f"❌ Error reporting location: {e}")
+
+    def start_reporting(self):
+        """Start sending updates in a background thread"""
+        if not self.running:
+            if not self.register_device():
+                print("❌ Could not start reporting (registration failed).")
+                return
+            self.running = True
+            self.thread = threading.Thread(target=self._run_loop, daemon=True)
+            self.thread.start()
+            print("▶️ Started location reporting...")
+
+    def stop_reporting(self):
+        """Stop sending updates"""
+        if self.running:
+            self.running = False
+            print("⏹️ Stopping location reporting...")
+            if self.thread:
+                self.thread.join()
+                self.thread = None
+            print("✅ Reporting stopped.")
+
+    def _run_loop(self):
+        """Loop that sends updates until stopped"""
+        while self.running:
+            self.report_location()
+            time.sleep(5)
+
 if __name__ == "__main__":
-    print("📱 Device Tracking Client v1.0")
-    print("=" * 40)
-    
-    # Initialize tracker
-    tracker = DeviceTracker()
-    
-    print(f"Device Serial: {tracker.device_serial}")
-    print("Registering device...")
-    
-    # Register device
-    if tracker.register_device():
-        print("Starting tracking...")
-        tracker.start_tracking()
-        
-        try:
-            # Keep running
-            while True:
-                time.sleep(1)
-        except KeyboardInterrupt:
-            tracker.stop_tracking()
-            print("👋 Goodbye!")
-    else:
-        print("❌ Failed to register device")
+    client = MobileClient("http://127.0.0.1:5000")
+
+    print("📱 Device Tracking Client v2.0")
+    print("========================================")
+    print(f"Device Serial: {client.device_serial}")
+
+    while True:
+        print("\nChoose an option:")
+        print("1. Start sending updates")
+        print("2. Stop sending updates")
+        print("3. Exit")
+        choice = input("> ")
+
+        if choice == "1":
+            client.start_reporting()
+        elif choice == "2":
+            client.stop_reporting()
+        elif choice == "3":
+            client.stop_reporting()
+            print("👋 Exiting client...")
+            break
+        else:
+            print("❌ Invalid choice, try again.")

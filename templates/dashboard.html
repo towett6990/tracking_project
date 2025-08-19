@@ -1,0 +1,225 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+
+  <!-- Welcome & Plan -->
+  <div class="card bg-secondary text-white mb-4 shadow-sm">
+    <div class="card-body">
+      <h3 class="card-title">Welcome, {{ user.username }} 👋</h3>
+      <p class="card-text">
+        Current Plan: 
+        {% if user.plan == "free" %}<span class="badge bg-light text-dark">Free</span>
+        {% elif user.plan == "basic" %}<span class="badge bg-success">Basic</span>
+        {% elif user.plan == "pro" %}<span class="badge bg-warning text-dark">Pro</span>
+        {% endif %}
+      </p>
+    </div>
+  </div>
+
+  <!-- Quick Action Cards -->
+  <div class="row mb-4">
+    {% for card in [
+        {'title':'➕ Add Device','text':'Register a new device to start tracking it.','url':'add_device'},
+        {'title':'🌍 All Devices Map','text':'View all tracked devices on a live map.','url':'all_devices_map'},
+        {'title':'📍 Live Map','text':'Track your devices individually in real-time.','url':'map_view'},
+        {'title':'🔎 Lost Device?','text':'Search for a lost device by its serial number.','url':'lost_device'}
+      ] %}
+    <div class="col-md-3 mb-3">
+      <div class="card bg-dark text-white shadow-sm h-100">
+        <div class="card-body d-flex flex-column">
+          <h5 class="card-title">{{ card.title }}</h5>
+          <p class="card-text flex-grow-1">{{ card.text }}</p>
+          <a href="{{ url_for(card.url) }}" class="btn btn-primary mt-auto">
+            {% if card.title.startswith('➕') %}Add{% else %}Open Map{% endif %}
+          </a>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- Device List -->
+  <div class="card bg-dark text-white shadow-sm mb-4">
+    <div class="card-body">
+      <h4 class="card-title mb-3">Your Devices</h4>
+      {% if devices %}
+      <ul class="list-group list-group-flush">
+        {% for device in devices %}
+        <li class="list-group-item bg-dark text-white d-flex justify-content-between align-items-center" data-serial="{{ device.serial_number }}">
+          <div>
+            <strong>{{ device.name }}</strong> ({{ device.serial_number }})
+            <span class="text-muted status">- {{ device.current_status }}</span>
+          </div>
+          <div>
+            <a href="{{ url_for('edit_device', device_id=device.id) }}" class="btn btn-sm btn-outline-light me-2">Edit</a>
+            <a href="{{ url_for('delete_device', device_id=device.id) }}" class="btn btn-sm btn-outline-danger">Delete</a>
+          </div>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="text-muted">You haven’t added any devices yet.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Live Map -->
+  <div class="card bg-dark text-white shadow-sm mb-4">
+    <div class="card-body">
+      <h4 class="card-title mb-3">Live Device Map</h4>
+      <div id="dashboardMap" style="height:600px;width:100%;"></div>
+    </div>
+  </div>
+
+  <!-- Device Table -->
+  <h2 class="mb-3 text-light">Device Table 📋</h2>
+  <table id="deviceTable" class="table table-dark table-hover table-striped align-middle shadow-lg rounded">
+    <thead>
+      <tr>
+        <th>Serial Number</th>
+        <th>Name</th>
+        <th>Status</th>
+        <th>Latitude</th>
+        <th>Longitude</th>
+        <th>Last Seen</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for device in devices %}
+      <tr>
+        <td><a href="{{ url_for('live_map', serial_number=device.serial_number) }}" class="text-info text-decoration-none">{{ device.serial_number }}</a></td>
+        <td>{{ device.name }}</td>
+        <td>
+          {% if device.current_status == 'Active' %}
+            <span class="badge bg-success">🟢 Active</span>
+          {% elif device.current_status == 'Lost' %}
+            <span class="badge bg-danger">🔴 Lost</span>
+          {% elif device.current_status == 'Inactive' %}
+            <span class="badge bg-secondary">⚪ Inactive</span>
+          {% else %}
+            <span class="badge bg-warning text-dark">🟡 Unknown</span>
+          {% endif %}
+        </td>
+        <td>{{ device.latitude or 'N/A' }}</td>
+        <td>{{ device.longitude or 'N/A' }}</td>
+        <td>{{ device.last_seen.strftime('%Y-%m-%d %H:%M:%S') if device.last_seen else 'Never' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+<!-- Live Map -->
+<div class="card bg-dark text-white shadow-sm mb-4">
+  <div class="card-body">
+    <h4 class="card-title mb-3">Live Device Map</h4>
+    <div id="dashboardMap" style="height: 600px; width: 100%;"></div>
+  </div>
+</div>
+
+<!-- Leaflet & Geocoder -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
+
+<script>
+  const alertSound = document.getElementById('alertSound');
+  const devicePositions = {};
+  const deviceTrails = {};
+  const markers = {};
+
+  // Initialize Leaflet map
+  const map = L.map('dashboardMap', { 
+    center: [0, 0], 
+    zoom: 2, 
+    maxZoom: 22,
+    zoomControl: true,
+    attributionControl: true
+  });
+
+  // Move zoom to top-right
+  map.zoomControl.setPosition('topright');
+
+  // Tile layers
+  const osm = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution: "© OpenStreetMap contributors"
+  });
+
+  const esri = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+    maxZoom: 22,
+    attribution: "Tiles © Esri"
+  });
+
+  // Add default layer
+  esri.addTo(map);
+
+  // Layer control
+  L.control.layers({ "OpenStreetMap": osm, "Esri Satellite": esri }).addTo(map);
+
+  // Remove Leaflet prefix
+  map.attributionControl.setPrefix('');
+
+  // Add search bar
+  L.Control.geocoder({
+    defaultMarkGeocode: true,
+    placeholder: 'Search for a place...',
+    showResultIcons: true
+  }).addTo(map);
+
+  // Function to update devices
+  async function updateDevices() {
+    try {
+      const res = await fetch('/api/devices');
+      const devices = await res.json();
+
+      devices.forEach(device => {
+        const li = document.querySelector(`[data-serial="${device.serial_number}"]`);
+        const prev = devicePositions[device.serial_number] || {};
+        const moved = prev.latitude !== device.latitude || prev.longitude !== device.longitude;
+
+        devicePositions[device.serial_number] = { latitude: device.latitude, longitude: device.longitude };
+
+        // Update list background on move
+        if (li) {
+          const statusSpan = li.querySelector('.status');
+          statusSpan.textContent = `- ${device.current_status}`;
+          if (moved) {
+            li.style.backgroundColor = '#1a8cff';
+            alertSound.play();
+            setTimeout(() => li.style.backgroundColor = '#111', 1000);
+          }
+        }
+
+        // Update map markers & trails
+        if (device.latitude && device.longitude) {
+          const coords = [device.latitude, device.longitude];
+          if (!markers[device.serial_number]) {
+            const marker = L.marker(coords).addTo(map)
+              .bindPopup(`<b>${device.name}</b><br>Serial: ${device.serial_number}<br>Last Seen: ${device.last_seen}`);
+            markers[device.serial_number] = marker;
+            deviceTrails[device.serial_number] = L.polyline([coords], { color:'cyan' }).addTo(map);
+          } else {
+            markers[device.serial_number].setLatLng(coords);
+            deviceTrails[device.serial_number].addLatLng(coords);
+          }
+        }
+      });
+
+      // Fit map to all markers
+      const allCoords = Object.values(devicePositions).map(p => [p.latitude,p.longitude]);
+      if(allCoords.length) map.fitBounds(L.latLngBounds(allCoords), { padding:[50,50] });
+
+    } catch(err) { console.error('Error fetching devices:', err); }
+  }
+
+  // Browser notifications
+  if("Notification" in window && Notification.permission!=="granted"){ Notification.requestPermission(); }
+
+  setInterval(updateDevices, 3000);
+  updateDevices();
+</script>
+{% endblock %}

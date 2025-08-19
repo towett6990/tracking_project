@@ -7,13 +7,14 @@
   <p class="text-red-600">{{ message }}</p>
 {% elif device %}
   <div class="mb-4">
+    <strong>Device Name:</strong> {{ device.name }}<br>  <!-- ✅ Added -->
     <strong>Serial:</strong> {{ device.serial_number }}<br>
     <strong>Make:</strong> {{ device.make }}<br>
     <strong>Model:</strong> {{ device.model }}<br>
     <strong>Status:</strong> {{ device.current_status }}<br>
     <strong>Location:</strong> {{ device.current_location }}<br>
     <strong>Last Updated:</strong> {{ device.last_updated }}<br>
-  </div>
+</div>
 
   {% if device.latitude and device.longitude %}
     <!-- Map Container -->

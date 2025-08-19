@@ -2,8 +2,9 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Device Map</title>
+    <title>Device Map with Live Earth Video</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
     <style>
@@ -26,10 +27,57 @@
         .leaflet-control-layers label {
             color: white;
         }
+        /* Floating live video window */
+        #liveVideo {
+            position: absolute;
+            top: 60px;
+            right: 20px;
+            width: 360px;
+            height: 240px;
+            background: #000;
+            border: 2px solid #444;
+            border-radius: 10px;
+            overflow: hidden;
+            display: none;
+            z-index: 1000;
+            resize: both;
+        }
+        #videoHeader {
+            background: #222;
+            color: white;
+            padding: 4px;
+            text-align: right;
+            cursor: move;
+        }
+        #closeVideo {
+            background: #ff4444;
+            color: white;
+            border: none;
+            padding: 2px 6px;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        #liveVideo iframe {
+            width: 100%;
+            height: calc(100% - 28px);
+            border: none;
+        }
     </style>
 </head>
 <body>
     <div id="map"></div>
+
+    <!-- Floating live video -->
+    <div id="liveVideo">
+        <div id="videoHeader">
+            <button id="closeVideo">❌</button>
+        </div>
+        <iframe 
+            src="https://www.youtube.com/embed/DDU-rZs-Ic4?autoplay=1&mute=1" 
+            allow="autoplay; encrypted-media" 
+            allowfullscreen>
+        </iframe>
+    </div>
 
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
@@ -48,33 +96,96 @@
             attribution: 'Tiles © Esri'
         });
 
-        liveFeed.addTo(map); // Default view
+        // Default layer
+        liveFeed.addTo(map);
 
-        // Layer control for toggling
+        // Special overlay for live video
+        var liveEarthVideo = L.layerGroup();
+
+        // Layer control
         var baseMaps = {
-            "Live Feed": liveFeed,
+            "Base Map": liveFeed,
             "Satellite": satellite
         };
-        L.control.layers(baseMaps).addTo(map);
+        var overlayMaps = {
+            "Live Earth Video": liveEarthVideo
+        };
+        L.control.layers(baseMaps, overlayMaps).addTo(map);
 
-        // Load device locations from Flask API
-        async function loadDevices() {
-            try {
-                let res = await fetch('/api/devices');
-                let devices = await res.json();
+        const videoBox = document.getElementById("liveVideo");
+        const header = document.getElementById("videoHeader");
+        const closeBtn = document.getElementById("closeVideo");
 
-                devices.forEach(device => {
-                    if (device.latitude && device.longitude) {
-                        let marker = L.marker([device.latitude, device.longitude]).addTo(map);
-                        marker.bindPopup(`<b>${device.name}</b><br>Serial: ${device.serial_number}<br>Last Seen: ${device.last_seen}`);
-                    }
-                });
-            } catch (err) {
-                console.error('Error loading devices:', err);
+        // Load saved position & size
+        function restoreVideoState() {
+            const pos = JSON.parse(localStorage.getItem("videoPosition"));
+            const size = JSON.parse(localStorage.getItem("videoSize"));
+            if (pos) {
+                videoBox.style.left = pos.left + "px";
+                videoBox.style.top = pos.top + "px";
+            }
+            if (size) {
+                videoBox.style.width = size.width + "px";
+                videoBox.style.height = size.height + "px";
             }
         }
 
-        loadDevices();
+        // Save state
+        function saveVideoState() {
+            localStorage.setItem("videoPosition", JSON.stringify({
+                left: videoBox.offsetLeft,
+                top: videoBox.offsetTop
+            }));
+            localStorage.setItem("videoSize", JSON.stringify({
+                width: videoBox.offsetWidth,
+                height: videoBox.offsetHeight
+            }));
+        }
+
+        // Show/hide video when overlay is toggled
+        map.on('overlayadd', function(e) {
+            if (e.name === "Live Earth Video") {
+                restoreVideoState();
+                videoBox.style.display = "block";
+            }
+        });
+        map.on('overlayremove', function(e) {
+            if (e.name === "Live Earth Video") {
+                videoBox.style.display = "none";
+            }
+        });
+
+        // Close button: hides video + untoggle overlay
+        closeBtn.addEventListener("click", function() {
+            videoBox.style.display = "none";
+            saveVideoState();
+            if (map.hasLayer(liveEarthVideo)) {
+                map.removeLayer(liveEarthVideo);
+            }
+        });
+
+        // Make draggable
+        let offsetX, offsetY, isDragging = false;
+        header.addEventListener("mousedown", (e) => {
+            isDragging = true;
+            offsetX = e.clientX - videoBox.offsetLeft;
+            offsetY = e.clientY - videoBox.offsetTop;
+        });
+        document.addEventListener("mousemove", (e) => {
+            if (isDragging) {
+                videoBox.style.left = (e.clientX - offsetX) + "px";
+                videoBox.style.top = (e.clientY - offsetY) + "px";
+            }
+        });
+        document.addEventListener("mouseup", () => {
+            if (isDragging) {
+                saveVideoState();
+            }
+            isDragging = false;
+        });
+
+        // Save size when user resizes
+        new ResizeObserver(() => saveVideoState()).observe(videoBox);
     </script>
 </body>
 </html>
