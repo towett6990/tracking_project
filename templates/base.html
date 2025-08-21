@@ -32,20 +32,20 @@
         <span class="navbar-toggler-icon"></span>
       </button>
       <div class="collapse navbar-collapse" id="navbarNav">
-        <ul class="navbar-nav ms-auto">
-          <li class="nav-item"><a class="nav-link text-light" href="{{ url_for('pricing') }}">Pricing</a></li>
-          {% if current_user is defined and current_user.is_authenticated %}
-            <li class="nav-item"><a class="nav-link" href="{{ url_for('index') }}">Dashboard</a></li>
-            <li class="nav-item"><a class="nav-link" href="{{ url_for('add_device') }}">Add Device</a></li>
-            <li class="nav-item"><a class="nav-link" href="{{ url_for('map_view') }}">Live Map</a></li>
-            <li class="nav-item"><a class="nav-link" href="{{ url_for('logout') }}">Logout</a></li>
-          {% else %}
-            <li class="nav-item"><a class="nav-link" href="{{ url_for('login') }}">Login</a></li>
-            <li class="nav-item"><a class="nav-link" href="{{ url_for('register') }}">Register</a></li>
-            <li class="nav-item"><a class="nav-link" href="{{ url_for('lost_device') }}">Lost Device?</a></li>
-          {% endif %}
-        </ul>
-      </div>
+  <ul class="navbar-nav ms-auto">
+    {% if current_user is defined and current_user.is_authenticated %}
+      <li class="nav-item"><a class="nav-link" href="{{ url_for('index') }}">Dashboard</a></li>
+      <li class="nav-item"><a class="nav-link" href="{{ url_for('add_device') }}">Add Device</a></li>
+      <li class="nav-item"><a class="nav-link" href="{{ url_for('map_view') }}">Live Map</a></li>
+      <li class="nav-item"><a class="nav-link" href="{{ url_for('logout') }}">Logout</a></li>
+    {% else %}
+      <li class="nav-item"><a class="nav-link" href="{{ url_for('login') }}">Login</a></li>
+      <li class="nav-item"><a class="nav-link" href="{{ url_for('register') }}">Register</a></li>
+      <li class="nav-item"><a class="nav-link" href="{{ url_for('lost_device') }}">Lost Device?</a></li>
+      <li class="nav-item"><a class="nav-link" href="{{ url_for('pricing_page') }}">Pricing</a></li>
+    {% endif %}
+  </ul>
+</div>
     </div>
   </nav>
 
