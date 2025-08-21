@@ -31,10 +31,9 @@ login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 
 @app.context_processor
-def inject_user_and_year():
-    from flask_login import current_user
-    from datetime import datetime
-    return dict(current_user=current_user, current_year=datetime.now().year)
+def inject_user():
+    return dict(current_user=current_user)
+
 
 
 # ===================== MODELS =====================
@@ -485,8 +484,9 @@ def lost_device():
     return render_template('lost_device.html')
 
 @app.route("/pricing")
-def pricing():
+def pricing_page():
     return render_template("pricing.html")
+
 
 
 @app.route('/api/device_location/<serial_number>', methods=['GET'])
