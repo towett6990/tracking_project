@@ -5,7 +5,7 @@ from flask_login import LoginManager, login_user, login_required, logout_user, c
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta, timezone
 from flask_login import LoginManager, current_user
-from .models import Device, User, db  
+from models import Device, User, db  
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
