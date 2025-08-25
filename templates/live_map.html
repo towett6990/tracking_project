@@ -1,15 +1,32 @@
 {% extends 'base.html' %}
+
 {% block content %}
 <div class="container mt-4">
   <h2 class="mb-3 text-light">Live Tracking for Device: {{ device.serial_number }}</h2>
+  
+  <!-- Map -->
   <div id="map" style="height: 500px; border-radius: 10px;"></div>
+
+  <!-- Controls -->
+  <div class="mt-3 d-flex justify-content-between">
+    <button onclick="toggleFollow()" class="btn btn-warning btn-sm">📍 Toggle Follow</button>
+  </div>
+
+  <!-- Loading Indicator -->
+  <div id="loading" style="display:none; text-align:center; margin-top:10px;">
+    <span>⏳ Updating...</span>
+  </div>
 </div>
 
-<!-- Leaflet.js CSS & JS -->
+<!-- Leaflet.js -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
 <script>
+    // Initialize map
     var map = L.map('map').setView([0.0, 0.0], 2);
 
+    // Map layers
     var liveFeed = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19,
         attribution: '© OpenStreetMap'
@@ -28,66 +45,55 @@
     };
     L.control.layers(baseMaps).addTo(map);
 
-    var deviceMarkers = {};
-    var firstLoad = true;
+    // Marker + Trail
+    var marker;
+    var trail = L.polyline([], { color: 'lime', weight: 3 }).addTo(map);
 
-    async function loadDevices() {
+    // Follow toggle
+    var followDevice = true;
+    function toggleFollow() {
+        followDevice = !followDevice;
+        alert("Follow mode: " + (followDevice ? "ON" : "OFF"));
+    }
+
+    // Fetch device location
+    async function loadDevice() {
         try {
-            let res = await fetch('/api/devices');
-            let devices = await res.json();
+            document.getElementById("loading").style.display = "block";
+            let res = await fetch(`/api/device_location/{{ device.serial_number }}`);
+            let d = await res.json();
+            document.getElementById("loading").style.display = "none";
 
-            let bounds = [];
+            if (d.error) return;
 
-            devices.forEach(device => {
-                if (device.latitude && device.longitude) {
-                    let latLng = [device.latitude, device.longitude];
-                    bounds.push(latLng);
+            if (d.latitude && d.longitude) {
+                let latLng = [d.latitude, d.longitude];
+                let lastSeen = d.last_seen ? new Date(d.last_seen).toLocaleString() : "N/A";
 
-                    if (deviceMarkers[device.serial_number]) {
-                        deviceMarkers[device.serial_number]
-                            .setLatLng(latLng)
-                            .setPopupContent(`<b>${device.name}</b><br>Serial: ${device.serial_number}<br>Last Seen: ${device.last_seen}`);
-                    } else {
-                        let marker = L.marker(latLng).addTo(map);
-                        marker.bindPopup(`<b>${device.name}</b><br>Serial: ${device.serial_number}<br>Last Seen: ${device.last_seen}`);
-                        deviceMarkers[device.serial_number] = marker;
-                    }
+                if (marker) {
+                    marker.setLatLng(latLng)
+                          .setPopupContent(`<b>${d.name}</b><br>Serial: ${d.serial_number}<br>Last Seen: ${lastSeen}`);
+                    trail.addLatLng(latLng);
+                } else {
+                    marker = L.marker(latLng).addTo(map)
+                        .bindPopup(`<b>${d.name}</b><br>Serial: ${d.serial_number}<br>Last Seen: ${lastSeen}`);
+                    map.setView(latLng, 15);
+                    trail.addLatLng(latLng);
                 }
-            });
 
-            // Auto-fit map on first load or if a device moved far
-            if (bounds.length > 0 && (firstLoad || hasMoved(bounds))) {
-                map.fitBounds(bounds, { padding: [50, 50] });
-                firstLoad = false;
+                if (followDevice) map.setView(latLng, 15);
             }
 
         } catch (err) {
-            console.error('Error loading devices:', err);
+            console.error("Error loading device:", err);
+            document.getElementById("loading").style.display = "none";
         }
     }
 
-    // Track last positions to detect large movement
-    var lastBounds = [];
-    function hasMoved(newBounds) {
-        if (lastBounds.length !== newBounds.length) {
-            lastBounds = newBounds;
-            return true;
-        }
-        for (let i = 0; i < newBounds.length; i++) {
-            if (Math.abs(newBounds[i][0] - lastBounds[i][0]) > 0.001 ||
-                Math.abs(newBounds[i][1] - lastBounds[i][1]) > 0.001) {
-                lastBounds = newBounds;
-                return true;
-            }
-        }
-        return false;
-    }
-
-    loadDevices();
-    setInterval(loadDevices, 5000);
+    // Initial load + refresh every 5s
+    loadDevice();
+    setInterval(loadDevice, 5000);
 </script>
-
-
 
 <style>
   body {

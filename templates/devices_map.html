@@ -1,97 +1,92 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Device Live Map</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-  <style>
-    body {
-      margin: 0;
-      height: 100vh;
-      display: flex;
-      flex-direction: column;
-      background: #111;
-      color: #eee;
-      font-family: Arial, sans-serif;
-    }
-    header {
-      padding: 10px;
-      background: #222;
-      text-align: center;
-      font-size: 20px;
-      font-weight: bold;
-    }
-    #map {
-      flex: 1;
-      width: 100%;
-    }
-  </style>
-</head>
-<body data-serial="{{ device.serial_number if device else '' }}">
-  <header>
-    Live Device Tracking
-  </header>
-  <div id="map"></div>
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-5">
+  <h1 class="text-center mb-4">🗺️ Device Map - {{ device.name }}</h1>
 
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-  <script>
-    // Initialize the map
-    var map = L.map("map", { center: [0,0], zoom: 2, maxZoom: 22 });
+  <!-- Device Info -->
+  <div class="mb-3">
+    <p><b>Serial Number:</b> {{ device.serial_number }}</p>
+    <p><b>Status:</b> {{ device.current_status }}</p>
+    <p><b>Location:</b> {{ device.current_location }}</p>
+    <p><b>Last Seen:</b> {{ device.last_seen.strftime('%Y-%m-%d %H:%M:%S') if device.last_seen else 'Never' }}</p>
+  </div>
 
-    // Tile layers
-    var osm = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      maxZoom: 19,
-      attribution: "© OpenStreetMap"
-    });
-    var esri = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
-      maxZoom: 22,
-      attribution: "Tiles © Esri"
-    });
+  <!-- Map Container -->
+  <div id="deviceMap" style="height: 500px; width: 100%;" class="rounded shadow mb-3"></div>
 
-    esri.addTo(map);
-    L.control.layers({ "OpenStreetMap": osm, "Esri Satellite": esri }).addTo(map);
+  <!-- Controls -->
+  <div class="d-flex justify-content-between mb-4">
+    <button id="toggleTrail" class="btn btn-secondary">🔄 Toggle Trail</button>
+    <span class="text-muted">Last Update: <span id="lastUpdate">Never</span></span>
+  </div>
 
-    // Marker placeholder (invisible until we have coords)
-    var marker = L.marker([0,0], { opacity: 0 }).addTo(map);
+  <!-- Alert Sound -->
+  <audio id="alertSound" src="{{ url_for('static', filename='alert.mp3') }}" preload="auto"></audio>
+</div>
 
-    // Get serial number from body attribute
-    const serial = document.body.dataset.serial;
+<!-- Leaflet.js -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
-    // Function to update position
-    function updatePosition(d, zoomOnFirst=true) {
-      if (!d || d.error || d.latitude == null || d.longitude == null) return;
-      const lat = d.latitude, lng = d.longitude;
+<script>
+const map = L.map("deviceMap").setView([{{ device.latitude or 0 }}, {{ device.longitude or 0 }}], 13);
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  attribution: "&copy; OpenStreetMap contributors"
+}).addTo(map);
 
-      marker.setLatLng([lat, lng]).setOpacity(1)
-        .bindPopup(`Serial: ${serial}<br>Last seen: ${d.last_seen || 'n/a'}`);
+let marker;
+let trail;
+let trailEnabled = true;
+let firstLoad = true;
 
-      if (zoomOnFirst) {
-        map.setView([lat, lng], 20); // Zoom close initially
-      } else {
-        const currentZoom = map.getZoom();
-        if (currentZoom >= 19) {
-          map.panTo([lat, lng], { animate: true, duration: 0.5 });
-        } else {
-          map.setView([lat, lng], 20);
-        }
-      }
+async function fetchDeviceLocation() {
+  try {
+    const response = await fetch(`/api/device_location/{{ device.serial_number }}`);
+    const data = await response.json();
+
+    if (!data.latitude || !data.longitude) return;
+
+    const latlng = [data.latitude, data.longitude];
+    const popupContent = `
+      <b>{{ device.name }}</b><br>
+      Serial: {{ device.serial_number }}<br>
+      Status: {{ device.current_status }}<br>
+      Last Seen: ${data.last_seen || 'Never'}
+    `;
+
+    if (marker) {
+      marker.setLatLng(latlng).setPopupContent(popupContent);
+      if (trailEnabled && trail) trail.addLatLng(latlng);
+      document.getElementById("alertSound").play();
+    } else {
+      marker = L.circleMarker(latlng, { radius: 8, color: "blue" }).addTo(map).bindPopup(popupContent);
+      trail = L.polyline([latlng], { color: "blue" }).addTo(map);
     }
 
-    // Initial fetch
-    if (serial) {
-      fetch(`/api/device_location/${encodeURIComponent(serial)}`)
-        .then(r => r.json())
-        .then(d => updatePosition(d, true))
-        .catch(console.error);
-
-      // Poll every 3s
-      setInterval(() => {
-        fetch(`/api/device_location/${encodeURIComponent(serial)}`)
-          .then(r => r.json())
-          .then(d => updatePosition(d, false))
-          .catch(console.error);
-      }, 3000);
+    if (firstLoad) {
+      map.setView(latlng, 13);
+      firstLoad = false;
     }
-  </script>
-</body>
-</html>
+
+    document.getElementById("lastUpdate").innerText = new Date().toLocaleTimeString();
+  } catch (err) {
+    console.error("Error fetching device location:", err);
+  }
+}
+
+// Auto-refresh every 3 seconds
+setInterval(fetchDeviceLocation, 3000);
+
+// Toggle trail visibility
+document.getElementById("toggleTrail").addEventListener("click", () => {
+  trailEnabled = !trailEnabled;
+  if (trail) {
+    if (trailEnabled) trail.addTo(map);
+    else map.removeLayer(trail);
+  }
+});
+
+// Initial fetch
+fetchDeviceLocation();
+</script>
+{% endblock %}

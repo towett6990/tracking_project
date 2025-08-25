@@ -111,11 +111,52 @@ class MobileClient:
             time.sleep(5)
 
 if __name__ == "__main__":
-    client = MobileClient("http://127.0.0.1:5000")
-
-    print("📱 Device Tracking Client v2.0")
+    print("📱 Device Tracking Client v2.1")
     print("========================================")
-    print(f"Device Serial: {client.device_serial}")
+
+    # Ask user for device name
+    device_name = input("Enter device name (e.g. 'Mom Phone', 'Work Tablet'): ").strip()
+    if not device_name:
+        device_name = "Unnamed Device"
+
+    client = MobileClient("http://127.0.0.1:5000")
+    client.device_name = device_name  # attach name to client
+
+    # Update register_device to use this name
+    original_register = client.register_device
+    def custom_register():
+        device_data = {
+            "serial_number": client.device_serial,
+            "name": client.device_name,   # use chosen name
+            "make": "Generic",
+            "model": "Simulated GPS",
+            "device_type": "Phone",
+            "current_status": "Active",
+            "current_location": "Initial Registration",
+            "latitude": None,
+            "longitude": None,
+            "user_id": 1
+        }
+        print(f"Registering device '{client.device_name}'...")
+        try:
+            response = requests.post(
+                f"{client.server_url}/api/register_device",
+                json=device_data,
+                timeout=10
+            )
+            if response.status_code == 200:
+                print(f"✅ Device registered: {client.device_serial} ({client.device_name})")
+                return True
+            else:
+                print(f"❌ Registration failed: {response.status_code}")
+                print(response.text)
+                return False
+        except Exception as e:
+            print(f"❌ Error registering device: {e}")
+            return False
+    client.register_device = custom_register
+
+    print(f"Device Serial: {client.device_serial} ({client.device_name})")
 
     while True:
         print("\nChoose an option:")
@@ -134,3 +175,4 @@ if __name__ == "__main__":
             break
         else:
             print("❌ Invalid choice, try again.")
+

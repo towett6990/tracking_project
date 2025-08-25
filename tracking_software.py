@@ -3,9 +3,12 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_login import LoginManager, login_user, login_required, logout_user, current_user, UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from flask_login import LoginManager, current_user
+from .models import Device, User, db  
+import sys
 import os
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import json
 import stripe
 app = Flask(__name__)
@@ -49,7 +52,7 @@ class Device(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     serial_number = db.Column(db.String(100), nullable=False)
     name = db.Column(db.String(100), nullable=False)
-    make = db.Column(db.String(100), nullable=False)
+    make = db.Column(db.String(100), nullable=True)
     model = db.Column(db.String(100), nullable=False)
     device_type = db.Column(db.String(100), nullable=False)
     current_status = db.Column(db.String(100), nullable=False)
@@ -60,7 +63,6 @@ class Device(db.Model):
     last_updated = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     last_seen = db.Column(db.DateTime)
-
 
 
     def to_dict(self):
@@ -193,11 +195,15 @@ def register():
         return redirect(url_for('login'))
     return render_template('register.html')
 
-@app.route("/live_map/<serial_number>")
+@app.route('/live_map/<serial_number>')
 @login_required
 def live_map(serial_number):
-    device = Device.query.filter_by(serial_number=serial_number).first_or_404()
+    device = Device.query.filter_by(serial_number=serial_number, user_id=current_user.id).first()
+    if not device:
+        flash("Device not found or not accessible.")
+        return redirect(url_for('dashboard'))
     return render_template("live_map.html", device=device)
+
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -286,6 +292,30 @@ def api_register_device():
     db.session.commit()
     return jsonify({"message": "Device registered successfully"}), 201
 
+@app.route('/api/device_location/<serial_number>', methods=['GET'])
+@login_required
+def get_device_location_api(serial_number):
+    """
+    Returns the latest location and info of a device by serial_number.
+    """
+    device = Device.query.filter_by(serial_number=serial_number, user_id=current_user.id).first()
+    
+    if not device or device.latitude is None or device.longitude is None:
+        return jsonify({'error': 'Device not found or no location available'}), 404
+
+    return jsonify({
+        'name': device.name,
+        'serial_number': device.serial_number,
+        'make': device.make,
+        'model': device.model,
+        'device_type': device.device_type,
+        'current_status': device.current_status,
+        'current_location': device.current_location,
+        'latitude': device.latitude,
+        'longitude': device.longitude,
+        'last_seen': device.last_seen.isoformat() if device.last_seen else None
+    })
+
 
 @app.route('/delete_device/<int:device_id>', methods=['POST'])
 @login_required
@@ -307,39 +337,59 @@ def logout():
     logout_user()
     return redirect(url_for('login'))
 
-@app.route("/add_device", methods=["GET", "POST"])
+def parse_float(value):
+    """Convert a string to float, return None if empty or invalid."""
+    try:
+        return float(value)
+    except (ValueError, TypeError):
+        return None
+
+@app.route('/add_device', methods=['GET', 'POST'])
 @login_required
 def add_device():
-    device_limit = {
-        "free": 1,
-        "basic": 5,
-        "pro": None  # unlimited
-    }
-
-    current_devices = Device.query.filter_by(user_id=current_user.id).count()
-    limit = device_limit.get(current_user.plan)
-
-    if limit is not None and current_devices >= limit:
-        flash(f"⚠️ Your {current_user.plan.capitalize()} Plan allows only {limit} devices. Upgrade for more!")
-        return redirect(url_for("dashboard"))
-
     if request.method == 'POST':
-        serial_number = request.form.get('serial_number')
-        name = request.form.get('name')  # ✅ Get device name
-        latitude = request.form.get('latitude')
-        longitude = request.form.get('longitude')
+        # Get form data safely
+        serial_number = request.form.get('serial_number', '').strip()
+        name = request.form.get('name', '').strip()
+        make = request.form.get('make', '').strip()
+        model = request.form.get('model', '').strip()
+        device_type = request.form.get('device_type', '').strip()
+        current_status = request.form.get('current_status', 'active').strip()
+        current_location = request.form.get('current_location', '').strip()
+        os_version = request.form.get('os_version', '').strip()
 
-        new_device = Device(
-            serial_number=serial_number,
-            name=name,
-            latitude=latitude,
-            longitude=longitude
-        )
-        db.session.add(new_device)
-        db.session.commit()
-        flash('Device added successfully', 'success')
-        return redirect(url_for('device_list'))
+        # Validate required fields
+        if not serial_number or not name or not make or not model:
+            flash("Please fill in all required fields: Serial Number, Name, Make, Model", "danger")
+            return redirect(url_for('add_device'))
+
+        try:
+            new_device = Device(
+                serial_number=serial_number,
+                name=name,
+                make=make,
+                model=model,
+                device_type=device_type or None,
+                current_status=current_status or "active",
+                current_location=current_location or None,
+                os_version=os_version or None,
+                last_updated=datetime.utcnow(),
+                user_id=current_user.id,
+            )
+
+            db.session.add(new_device)
+            db.session.commit()
+            flash(f"Device '{name}' added successfully!", "success")
+            return redirect(url_for('dashboard'))  # redirect to dashboard
+
+        except Exception as e:
+            db.session.rollback()
+            flash(f"Error adding device: {e}", "danger")
+            return redirect(url_for('add_device'))
+
+    # GET request renders the form
     return render_template('add_device.html')
+
 
 @app.route('/search_device', methods=['POST'])
 @login_required
@@ -354,7 +404,8 @@ def map_view():
     devices = Device.query.filter_by(user_id=current_user.id).all()
     return render_template('map.html', devices=devices)
 
-# ===================== API ROUTES =====================
+# ===================== API ROUTES ====================
+
 @app.route('/api/devices')
 @login_required
 def api_devices():
@@ -362,7 +413,12 @@ def api_devices():
 
     def get_status(device):
         if device.last_seen:
-            if datetime.now(timezone.utc) - device.last_seen <= timedelta(minutes=5):
+            # Make last_seen timezone-aware
+            last_seen_utc = device.last_seen
+            if device.last_seen.tzinfo is None:
+                last_seen_utc = device.last_seen.replace(tzinfo=timezone.utc)
+
+            if datetime.now(timezone.utc) - last_seen_utc <= timedelta(minutes=5):
                 return "online"
         return "offline"
 
@@ -402,7 +458,6 @@ def api_report_location():
         return jsonify({"message": "Location updated"}), 200
     else:
         return jsonify({"error": "Device not found"}), 404
-
 
 
 @app.route('/api/live_locations')
@@ -484,27 +539,18 @@ def lost_device():
     return render_template('lost_device.html')
 
 @app.route("/pricing")
-def pricing_page():
+def pricing():
     return render_template("pricing.html")
 
 
-
-@app.route('/api/device_location/<serial_number>', methods=['GET'])
-def get_device_location(serial_number):
-    device = Device.query.filter_by(serial_number=serial_number).first()
-    if device and device.latitude and device.longitude:
-        return jsonify({
-            'latitude': device.latitude,
-            'longitude': device.longitude,
-            'last_seen': device.last_seen.isoformat() if device.last_seen else None
-        })
-    return jsonify({'error': 'Device not found'}), 404
-
-@app.route("/dashboard")
+@app.route("/device_map/<serial_number>")
 @login_required
-def dashboard():
-    devices = Device.query.filter_by(user_id=current_user.id).all()
-    return render_template("dashboard.html", user=current_user, devices=devices)
+def device_map(serial_number):
+    device = Device.query.filter_by(serial_number=serial_number, user_id=current_user.id).first()
+    if not device:
+        flash("Device not found!")
+        return redirect(url_for("dashboard"))
+    return render_template("device_map.html", device=device)
 
 
 @app.route('/api/command_ack', methods=['POST'])

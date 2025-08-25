@@ -1,40 +1,64 @@
 {% extends "base.html" %}
-{% block title %}Add Device{% endblock %}
+
 {% block content %}
-<div class="row justify-content-center">
-  <div class="col-md-6">
-    <h3 class="mb-4">Add New Device</h3>
-    <form method="POST">
-      <div class="mb-3">
-        <label>Device Name</label>
-        <input type="text" class="form-control" name="name" placeholder="Enter device name" required>
-      </div>
-      <div class="mb-3">
-        <label>Serial Number</label>
-        <input type="text" class="form-control" name="serial_number" required>
-      </div>
-      <div class="mb-3">
-        <label>Make</label>
-        <input type="text" class="form-control" name="make" required>
-      </div>
-      <div class="mb-3">
-        <label>Model</label>
-        <input type="text" class="form-control" name="model" required>
-      </div>
-      <div class="mb-3">
-        <label>Type</label>
-        <input type="text" class="form-control" name="type" required>
-      </div>
-      <div class="mb-3">
-        <label>Status</label>
-        <input type="text" class="form-control" name="status" required>
-      </div>
-      <div class="mb-3">
-        <label>Location</label>
-        <input type="text" class="form-control" name="location" required>
-      </div>
-      <button class="btn btn-primary w-100">Add Device</button>
-    </form>
-  </div>
+<div class="container mt-5">
+  <h1 class="text-center mb-4">➕ Add New Device</h1>
+
+  <form method="POST" action="{{ url_for('add_device') }}">
+    <!-- Serial Number -->
+    <div class="mb-3">
+      <label for="serial_number" class="form-label">Serial Number *</label>
+      <input type="text" class="form-control" id="serial_number" name="serial_number" required>
+    </div>
+
+    <!-- Device Name -->
+    <div class="mb-3">
+      <label for="name" class="form-label">Device Name *</label>
+      <input type="text" class="form-control" id="name" name="name" required>
+    </div>
+
+    <!-- Make -->
+    <div class="mb-3">
+      <label for="make" class="form-label">Make *</label>
+      <input type="text" class="form-control" id="make" name="make" required>
+    </div>
+
+    <!-- Model -->
+    <div class="mb-3">
+      <label for="model" class="form-label">Model *</label>
+      <input type="text" class="form-control" id="model" name="model" required>
+    </div>
+
+    <!-- Device Type -->
+    <div class="mb-3">
+      <label for="device_type" class="form-label">Device Type</label>
+      <input type="text" class="form-control" id="device_type" name="device_type" placeholder="e.g. Phone, Laptop">
+    </div>
+
+    <!-- Current Status -->
+    <div class="mb-3">
+      <label for="current_status" class="form-label">Current Status</label>
+      <select class="form-select" id="current_status" name="current_status">
+        <option value="active">Active</option>
+        <option value="inactive">Inactive</option>
+        <option value="lost">Lost</option>
+        <option value="retired">Retired</option>
+      </select>
+    </div>
+
+    <!-- Current Location -->
+    <div class="mb-3">
+      <label for="current_location" class="form-label">Current Location</label>
+      <input type="text" class="form-control" id="current_location" name="current_location" placeholder="e.g. Nairobi Office">
+    </div>
+
+    <!-- OS Version -->
+    <div class="mb-3">
+      <label for="os_version" class="form-label">OS Version</label>
+      <input type="text" class="form-control" id="os_version" name="os_version" placeholder="e.g. Windows 11, Android 14">
+    </div>
+
+    <button type="submit" class="btn btn-success w-100">Add Device</button>
+  </form>
 </div>
 {% endblock %}
