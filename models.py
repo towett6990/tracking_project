@@ -25,18 +25,19 @@ class User(db.Model, UserMixin):
 # -----------
 class Device(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    serial_number = db.Column(db.String(100), nullable=False, unique=True)
+    serial_number = db.Column(db.String(100), nullable=False)
     name = db.Column(db.String(100), nullable=False)
-    make = db.Column(db.String(100), nullable=False)
-    model = db.Column(db.String(100), nullable=False)
-    device_type = db.Column(db.String(50), nullable=True)
+    make = db.Column(db.String(100), nullable=True)   # changed
+    model = db.Column(db.String(100), nullable=True)  # changed
+    device_type = db.Column(db.String(100), nullable=True)
+    current_status = db.Column(db.String(50), nullable=True, default="active")
+    current_location = db.Column(db.String(255), nullable=True)
     os_version = db.Column(db.String(50), nullable=True)
-    current_status = db.Column(db.String(20), nullable=False, default="active")
-    current_location = db.Column(db.String(100), nullable=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
-    last_updated = db.Column(db.DateTime, default=datetime.utcnow)
+    latitude = db.Column(db.Float, nullable=True)
+    longitude = db.Column(db.Float, nullable=True)
+    last_updated = db.Column(db.DateTime, nullable=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
     last_seen = db.Column(db.DateTime, nullable=True)
-
 
     def __repr__(self):
         return f"<Device {self.name} ({self.serial_number})>"
